@@ -1,576 +1,156 @@
-# Math Foundations
+# Math Foundations (Why and How)
 
-## Overview
-
-LineLogic is built on **quantitative sports betting theory**, combining probability, expected value, portfolio optimization, and evaluation metrics. This document provides the mathematical foundation for all models and recommendations.
-
-## Odds Formats and Conversions
-
-### American Odds
-
-Standard in US sportsbooks:
-
-- **Positive (+150)**: Amount you win on a $100 bet
-- **Negative (-150)**: Amount you must bet to win $100
-
-### Decimal Odds
-
-Common in Europe and Australia:
-
-- **Decimal (2.50)**: Total return per $1 bet (includes stake)
-
-### Implied Probability
-
-Convert odds to probability:
-
-**From American:**
-
-```
-If odds > 0:
-    implied_prob = 100 / (odds + 100)
-
-If odds < 0:
-    implied_prob = -odds / (-odds + 100)
-```
-
-**From Decimal:**
-
-```
-implied_prob = 1 / decimal_odds
-```
-
-**Implementation:**
-
-See `src/linelogic/odds/math.py` for full functions with edge case handling.
-
-### Examples
-
-| American | Decimal | Implied Prob | Payout on $100 |
-|----------|---------|--------------|----------------|
-| +150     | 2.50    | 40.0%        | $150           |
-| -150     | 1.67    | 60.0%        | $66.67         |
-| +100     | 2.00    | 50.0%        | $100           |
-| -200     | 1.50    | 66.7%        | $50            |
+This chapter is a graduate-level refresher on the probabilistic and decision-theoretic backbone of sports betting. We focus on **why** each quantity matters for beating markets, and **how** to compute and deploy it correctly. Assumed background: measure-theoretic probability intuition, basic statistics, and utility theory.
 
 ---
 
-## Vigorish (Vig) and Fair Odds
+## 1. Odds, Prices, and Implied Probabilities
 
-### The Problem
+### 1.1 Odds as Prices
+Odds are simply prices for binary payoffs. If a bet pays $b$ net on a $1$ stake when the event occurs and $-1$ otherwise, the fair price under risk-neutral measure is $p \cdot b - (1-p) = 0$, so the **no-arbitrage implied probability** is $p = 1/(b+1)$ in decimal odds. American odds are just a reparameterization of $b$.
 
-Sportsbooks embed a margin (vig) in their odds. For a fair two-way market:
+### 1.2 Conversions (How)
+Let $o_A$ be American odds and $o_D$ decimal odds.
+- If $o_A > 0$, then payout ratio $b = o_A/100$, implied $p = 100/(o_A+100)$.
+- If $o_A < 0$, then $b = 100/|o_A|$, implied $p = |o_A|/(|o_A|+100)$.
+- Decimal odds: $p = 1/o_D$.
 
-```
-P(A) + P(B) = 1.00
-```
+Edge cases: very large $|o_A|$ approach $p \to 0$ or $1$; ensure numeric stability. Implementation lives in `src/linelogic/odds/math.py` with tests for symmetry and round-trip consistency.
 
-But bookmaker odds sum to **>1.00** (overround):
-
-```
-P_market(A) + P_market(B) = 1.05 to 1.10
-```
-
-This 5-10% is the vig.
-
-### Removing Vig
-
-**Proportional Method (Simple):**
-
-```
-fair_prob(A) = market_prob(A) / (market_prob(A) + market_prob(B))
-fair_prob(B) = market_prob(B) / (market_prob(A) + market_prob(B))
-```
-
-**Example:**
-
-- Over 25.5 points: -110 (52.4% implied)
-- Under 25.5 points: -110 (52.4% implied)
-- Sum: 104.8% (4.8% vig)
-
-Fair odds:
-
-```
-P(Over) = 52.4% / 104.8% = 50.0%
-P(Under) = 52.4% / 104.8% = 50.0%
-```
-
-**Alternative Methods:**
-
-- **Margin proportional to odds**: Allocate vig inversely to implied prob
-- **Shin method**: Assumes informed insiders, requires numerical optimization
-- **Power method**: Raise each prob to power, then normalize
-
-For LineLogic M0, we use **proportional (simple)**. Document alternatives in code for future experimentation.
+### 1.3 Why this matters
+All downstream quantities (EV, Kelly, CLV) operate on probabilities, not odds. Any bias in conversion propagates linearly into staking errors and non-linear into log-utility. Getting the mapping correct is table stakes.
 
 ---
 
-## Expected Value (EV)
+## 2. Vigorish, Overround, and Fair Lines
 
-### Definition
+### 2.1 Why vig removal is necessary
+Books quote **distorted probabilities** to embed margin. If we compare our model to raw book numbers, we will systematically overestimate value. Fair probabilities are the only defensible baseline for edge estimation.
 
-Expected value is the **long-run average** profit/loss per bet:
+### 2.2 Overround (What)
+For a two-way market, let $p_1^{m}, p_2^{m}$ be market-implied probabilities from odds. The overround is $\omega = p_1^{m} + p_2^{m} - 1$, typically 0.02–0.10.
 
-```
-EV = (prob_win × payout) - (prob_loss × stake)
-```
+### 2.3 De-vig methods (How)
+We need a mapping $T$ such that $p_i = T(p_i^{m})$ with $\sum p_i = 1$.
+- **Proportional (used in M0/M1):** $p_i = p_i^{m} / \sum_j p_j^{m}$. Simple, stable, unbiased if vig is additive.
+- **Shin (informed money model):** Introduces insider fraction $z$ and solves nonlinear system; better when limits are high and asymmetry exists.
+- **Power / logit scaling:** $p_i \propto (p_i^{m})^{\alpha}$, tune $\alpha$ to historical hold distributions.
 
-Or equivalently:
+We default to proportional for robustness and clarity; Shin is a planned experiment when we have closing-line histories.
 
-```
-EV = (prob_win × (odds + stake)) - stake
-EV = stake × (prob_win × odds - prob_loss)
-```
-
-### Positive EV (+EV)
-
-A bet with **EV > 0** is profitable in the long run. This is the **only** sustainable reason to bet.
-
-### Example
-
-**Bet:**
-
-- Player Over 25.5 points
-- Odds: +110 (2.10 decimal)
-- Our model: P(Over) = 55%
-- Market implied: P(Over) = 47.6%
-
-**Calculation:**
-
-```
-Stake = $100
-Payout = $110
-prob_win = 0.55
-prob_loss = 0.45
-
-EV = (0.55 × $110) - (0.45 × $100)
-EV = $60.50 - $45.00
-EV = $15.50 per $100 bet (15.5% ROI)
-```
-
-**Interpretation:** If we make this bet 1000 times, we expect to win $15,500 on $100,000 wagered.
+### 2.4 Sensitivity (Why)
+Edge is linear in de-vig probabilities: a 1 pp error in $p$ becomes a 1 pp error in edge. Since Kelly stake is roughly linear near small edges, vig-removal accuracy directly controls bankroll volatility.
 
 ---
 
-## Edge
+## 3. Expected Value and Edge
 
-### Definition
+### 3.1 Expected value (EV)
+For stake $s$, decimal odds $o$, model win probability $p$, loss prob $q=1-p$:
+$$EV = s \big(p (o-1) - q\big).$$
+Positive EV ($EV>0$) is a **necessary** condition for long-run growth.
 
-**Edge** is the difference between our model's probability and the market's fair probability:
+### 3.2 Edge (Why)
+Define **edge** as $\text{edge} = p - p_{\text{fair}}$. A model that only matches the fair price (edge = 0) will lose to vig; a positive edge indicates price improvement over the market. Edge is the sufficient statistic for both EV sign and Kelly sizing (see §4).
 
-```
-edge = prob_model - prob_market_fair
-```
-
-**Example:**
-
-- Our model: 55%
-- Market (vig-removed): 48%
-- Edge: 55% - 48% = **7%**
-
-### Minimum Edge Threshold
-
-Due to estimation error, we require a **minimum edge** before betting:
-
-- **Conservative**: 5% edge
-- **Moderate**: 3% edge
-- **Aggressive**: 1% edge
-
-LineLogic defaults to **5%** for POC to avoid false positives.
+### 3.3 Estimation error (How to guard)
+If $\hat p$ has standard error $\sigma_p$, then stake and EV inherit that uncertainty. We apply **minimum edge thresholds** (default 5 pp) so that $\text{edge} \gg \sigma_p$, reducing false positives from noise.
 
 ---
 
-## Kelly Criterion
+## 4. Kelly Criterion, Utility, and Risk Control
 
-### Purpose
+### 4.1 Why Kelly
+Kelly maximizes expected log-wealth for IID bets. For a single bet with payout ratio $b$ and win prob $p$, the log-utility is $U(f) = p \log(1+fb) + q \log(1-f)$; first-order condition yields
+$$f^{*} = \frac{pb - q}{b}.$$
+This is optimal for growth but ignores estimation error and correlation.
 
-Kelly Criterion determines the **optimal stake size** to maximize long-term log wealth.
+### 4.2 Fractional Kelly (How)
+We bet $f = \lambda f^{*}$ with $\lambda \in [0,1]$. Fractional Kelly trades growth for drawdown control; variance of log-returns scales roughly with $\lambda^2$ while growth scales roughly with $\lambda$. Empirically, $\lambda \in [0.25, 0.5]$ captures 50–75% of the growth with far smaller volatility. LineLogic defaults to $\lambda = 0.25$.
 
-### Formula
+### 4.3 Correlation and meta-bets (Why)
+Kelly assumes independence. Same-game or same-player bets are positively correlated; naive application overbets. We use heuristics to group correlated bets into a meta-bet and cap exposure (5% single, 10% game/player, 20% day). Future work: estimate correlation matrices and apply **Kelly with correlation** via quadratic form on log-utility Hessian.
 
-For a two-outcome bet:
-
-```
-f* = (p × b - q) / b
-```
-
-Where:
-
-- `f*` = fraction of bankroll to bet
-- `p` = probability of winning
-- `q` = 1 - p (probability of losing)
-- `b` = payout ratio (e.g., +150 odds → b = 1.5)
-
-### Example
-
-**Bet:**
-
-- P(win) = 55%
-- Odds: +110 (b = 1.1)
-- Bankroll: $10,000
-
-```
-f* = (0.55 × 1.1 - 0.45) / 1.1
-f* = (0.605 - 0.45) / 1.1
-f* = 0.155 / 1.1
-f* = 0.141 (14.1%)
-
-Optimal bet = 0.141 × $10,000 = $1,410
-```
-
-### Kelly Dangers
-
-**Full Kelly is aggressive** and can lead to large drawdowns. Issues:
-
-1. **Estimation error**: If our 55% is actually 52%, we overbet
-2. **Bankroll volatility**: 14% of bankroll per bet is risky
-3. **Correlated bets**: Multiple bets on same game/team compound risk
-
-### Fractional Kelly (Recommended)
-
-Bet a **fraction** of the Kelly amount:
-
-```
-stake = f* × fraction × bankroll
-```
-
-**Common fractions:**
-
-- **1/4 Kelly (0.25)**: Conservative, reduces volatility by ~75%
-- **1/2 Kelly (0.50)**: Moderate, reduces volatility by ~50%
-- **1/3 Kelly (0.33)**: Balanced
-
-LineLogic defaults to **1/4 Kelly** for POC.
-
-**Adjusted example:**
-
-```
-1/4 Kelly = 0.141 × 0.25 = 0.035 (3.5%)
-Bet = 0.035 × $10,000 = $350
-```
+### 4.4 Model error robustness
+If true $p$ differs from estimated $\hat p$ by $\Delta$, the Kelly fraction error is roughly $\Delta/b$. Fractional Kelly reduces sensitivity linearly in $\lambda$; hence another reason to avoid full Kelly with noisy models.
 
 ---
 
-## Portfolio Considerations
+## 5. Evaluation: Calibration, Sharpness, Price Beating
 
-### Exposure Caps
+### 5.1 Brier Score (How and Why)
+$$\text{Brier} = \frac{1}{N} \sum_{i=1}^{N} (\hat p_i - y_i)^2.$$
+Measures **calibration** and **sharpness** jointly. Quadratic penalty is symmetric; good for bounded probabilities and interpretable decomposition (reliability, resolution, uncertainty). In betting, well-calibrated probabilities align staking with true risk; miscalibration inflates Kelly stakes.
 
-Even with fractional Kelly, we limit **aggregate exposure** to avoid concentration risk:
+### 5.2 Log Loss
+$$\text{LogLoss} = -\frac{1}{N} \sum_{i=1}^{N} \big(y_i \log \hat p_i + (1-y_i) \log(1-\hat p_i)\big).$$
+Asymmetric penalty: brutally punishes overconfident errors. Appropriate when we care about tail risk of bad probability estimates (we do, because of Kelly sensitivity).
 
-**Rules:**
+### 5.3 Calibration plots (How)
+Bucket $\hat p$ into bins, compute empirical win rate per bin, and compare to the 45° line. Deviations diagnose systemic bias (over/under-confidence). Adjust with Platt scaling / isotonic if needed.
 
-1. **Per-bet cap**: Max 5% of bankroll per single bet (overrides Kelly)
-2. **Per-game cap**: Max 10% of bankroll across all bets on one game
-3. **Per-day cap**: Max 20% of bankroll across all bets on one day
-4. **Per-player cap**: Max 10% of bankroll on same player across markets
+### 5.4 Closing Line Value (CLV) (Why)
+CLV checks if we **beat the market’s final consensus**, a forward-looking efficiency test. If $p_{\text{open}}$ is our implied prob from the wagered line and $p_{\text{close}}$ from closing:
+$$\text{CLV} = p_{\text{close}} - p_{\text{open}}.$$
+Persistent positive CLV implies informational or timing edge even before outcomes resolve. It is lower-variance than ROI for small samples.
 
-### Correlation Heuristics
-
-**Problem:** Same-game bets are correlated. If LeBron scores 30+, Lakers are likely winning. Betting both is not diversification.
-
-**Heuristic rules:**
-
-- Flag bets on same game
-- Flag bets on same team
-- Flag bets on same player (different markets)
-- **Conservative approach**: Treat correlated bets as one "meta-bet" and apply Kelly to the combined payoff
-
-**Future work:** Build correlation matrices from historical data to quantify dependencies.
+### 5.5 ROI and Sharpe (Context)
+ROI: $\text{ROI} = \text{Profit} / \text{Staked}$. Sharpe: $(\mu - r_f)/\sigma$. In betting, $r_f \approx 0$. Sharpe captures risk-adjusted performance; good models show Sharpe 0.5–1.5+. Beware short-sample Sharpe inflation.
 
 ---
 
-## Evaluation Metrics
+## 6. Statistical Power and Significance
 
-### Brier Score
+### 6.1 Binomial confidence (How)
+For win rate $\hat p$ over $n$ bets, standard error $\sigma = \sqrt{\hat p(1-\hat p)/n}$. A 95% CI: $\hat p \pm 1.96\sigma$. To distinguish 52% from 50% at 95% power requires $n \approx 300$ bets.
 
-**Purpose:** Measure probabilistic calibration.
+### 6.2 Bayesian perspective (Why)
+Using a Beta prior $\text{Beta}(\alpha,\beta)$ yields posterior $\text{Beta}(\alpha + k, \beta + n-k)$. Posterior intervals shrink extreme observed rates toward prior mean, mitigating small-sample overreaction. This is preferable when we continuously update models.
 
-**Formula:**
-
-```
-Brier = (1/N) × Σ (predicted_prob - actual_outcome)^2
-```
-
-Where `actual_outcome` is 0 (loss) or 1 (win).
-
-**Range:** 0 (perfect) to 1 (worst)
-
-**Good score:**
-
-- <0.15: Excellent
-- 0.15-0.20: Good
-- 0.20-0.25: Acceptable
-- \>0.25: Poor
-
-**Example:**
-
-```
-Bet 1: Predicted 60%, outcome = win (1) → (0.6 - 1)^2 = 0.16
-Bet 2: Predicted 60%, outcome = loss (0) → (0.6 - 0)^2 = 0.36
-Bet 3: Predicted 40%, outcome = loss (0) → (0.4 - 0)^2 = 0.16
-
-Brier = (0.16 + 0.36 + 0.16) / 3 = 0.227
-```
-
-### Log Loss (Cross-Entropy)
-
-**Purpose:** Penalize confident wrong predictions more heavily than Brier.
-
-**Formula:**
-
-```
-LogLoss = -(1/N) × Σ [y × log(p) + (1-y) × log(1-p)]
-```
-
-Where `y` is actual outcome (0 or 1), `p` is predicted probability.
-
-**Range:** 0 (perfect) to ∞ (worst)
-
-**Good score:**
-
-- <0.50: Excellent
-- 0.50-0.60: Good
-- 0.60-0.70: Acceptable
-- \>0.70: Poor
-
-### Calibration
-
-**Purpose:** Are our 60% predictions actually winning 60% of the time?
-
-**Method:**
-
-1. Bucket predictions (e.g., 50-55%, 55-60%, 60-65%)
-2. Calculate average predicted prob and empirical win rate per bucket
-3. Plot predicted vs. actual
-4. Perfect calibration: points lie on y=x line
-
-**Example:**
-
-| Bucket | Avg Predicted | Wins | Total | Empirical Win Rate |
-|--------|---------------|------|-------|--------------------|
-| 50-55% | 52.5%         | 10   | 20    | 50.0%              |
-| 55-60% | 57.5%         | 12   | 20    | 60.0%              |
-| 60-65% | 62.5%         | 11   | 20    | 55.0%              |
-
-Interpretation: Model is slightly overconfident in 60-65% bucket.
-
-### Closing Line Value (CLV)
-
-**Purpose:** Did we beat the closing line?
-
-**Definition:**
-
-- **Opening line**: Odds when we place bet
-- **Closing line**: Odds just before game starts
-- **CLV**: Positive if our odds were better than closing
-
-**Formula:**
-
-```
-CLV = implied_prob_close - implied_prob_open
-```
-
-If CLV > 0, we got a better price than the sharp closing line.
-
-**Example:**
-
-- We bet Over 25.5 at +110 (implied 47.6%)
-- Closing line: Over 25.5 at -110 (implied 52.4%)
-- CLV = 52.4% - 47.6% = **+4.8%**
-
-We beat the closing line by 4.8 percentage points.
-
-**Why it matters:**
-
-- Closing line is the "wisdom of the crowd" (sharpest bettors)
-- Positive CLV → long-term indicator of skill
-- Negative CLV → losing strategy even if short-term lucky
+### 6.3 Multiple testing
+Screening thousands of prop candidates introduces false positives. Mitigate by: (1) minimum edge thresholds, (2) shrinkage priors on player effects, (3) out-of-sample evaluation, (4) CLV as a process metric independent of win/loss noise.
 
 ---
 
-## ROI and Sharpe Ratio
+## 7. Model Design for Betting
 
-### Return on Investment (ROI)
+### 7.1 Baseline (M0)
+Simple, low-variance estimators: recent mean ± half a standard deviation. Why: hard to overfit; serves as calibration anchor. We require edge > 5 pp to offset noise.
 
-```
-ROI = (Total Profit) / (Total Staked)
-```
+### 7.2 Generalized Linear Models (M1)
+Use Poisson/negative binomial for counts (points, rebounds) or Gaussian for continuous rates with link functions. GLMs provide calibrated probabilities and interpretable coefficients (pace, usage, opponent defense). Regularize (L1/L2) to control variance.
 
-**Example:**
+### 7.3 Ensembles and Market Features (M2+)
+Gradient-boosted trees capture nonlinear interactions (pace x matchup x rest). Add market signals (line moves, juice asymmetry) as priors; combine with GLM via stacking. Evaluate with walk-forward CV to respect temporal order.
 
-- Wagered: $10,000
-- Profit: $1,200
-- ROI = 1,200 / 10,000 = **12%**
-
-**Good ROI in sports betting:**
-
-- 3-5%: Professional
-- 5-10%: Elite
-- \>10%: Exceptional (or lucky/short sample)
-
-### Sharpe Ratio
-
-**Purpose:** Risk-adjusted returns.
-
-**Formula:**
-
-```
-Sharpe = (Mean Return - Risk-Free Rate) / Std Dev of Returns
-```
-
-**Interpretation:**
-
-- Sharpe > 1.0: Good
-- Sharpe > 2.0: Excellent
-- Sharpe > 3.0: World-class (or overfitting)
-
-Sports betting Sharpe ratios are typically **0.5 to 1.5** for good strategies.
+### 7.4 Line movement as information
+Reverse line moves, steam, and limits convey crowd information. Incorporate closing line as a posterior update: $p_{\text{final}} = w_{\text{model}} \hat p + (1-w_{\text{model}}) p_{\text{close}}$, with $w$ tuned on historical CLV.
 
 ---
 
-## Hypothesis Testing and Statistical Significance
+## 8. Risk Controls and Execution
 
-### The Problem
+### 8.1 Exposure limits (How)
+Hard caps (5% single, 10% game/player, 20% day) override Kelly to prevent tail events from compounding. These are deterministic constraints layered atop stochastic sizing.
 
-With small samples, luck dominates. A 55% win rate over 100 bets could easily be 50% in reality.
+### 8.2 Correlation handling (Future work)
+Estimate pairwise or factor correlations across props (team pace, injury news, opponent defense). Solve for optimal stakes via mean-variance or Kelly-with-correlation approximations.
 
-### Confidence Intervals
-
-For a binomial (win/loss):
-
-```
-Standard Error = sqrt( p × (1-p) / n )
-95% CI = p ± 1.96 × SE
-```
-
-**Example:**
-
-- 55 wins out of 100 bets (55% win rate)
-- SE = sqrt(0.55 × 0.45 / 100) = 0.0497
-- 95% CI = 55% ± 9.7% = **45.3% to 64.7%**
-
-**Interpretation:** We cannot confidently say this is >50%.
-
-**Rule of thumb:** Need **300+ bets** to distinguish 52% from 50% with statistical significance.
+### 8.3 Latency and stale lines
+Execution delay erodes edge. Track time-to-place-bet and line drift; require edges that survive expected slippage. If drift expected $d$ pp against us, require edge > threshold + $d$.
 
 ---
 
-## Avoiding Common Pitfalls
+## 9. Putting It Together
 
-### 1. Leakage
+The betting loop:
+1. Convert odds → implied probabilities (correctly, including vig removal).
+2. Produce calibrated model probabilities with honest uncertainty.
+3. Compute edge = $p_{\text{model}} - p_{\text{fair}}$; discard below threshold.
+4. Size stakes with fractional Kelly under exposure caps and correlation heuristics.
+5. Track outcomes and **process metrics** (CLV, calibration) to validate edge before ROI converges.
 
-**Problem:** Using future information to predict past.
-
-**Example:** Betting on a player prop using post-game injury reports.
-
-**Prevention:**
-
-- Strict train/test split by date
-- Only use data available **before** bet placement
-
-### 2. Overfitting
-
-**Problem:** Model fits noise in training data, fails on new data.
-
-**Prevention:**
-
-- Simple models first (linear, GLM)
-- Holdout validation (never touch until final evaluation)
-- Cross-validation on time series (walk-forward)
-- Regularization (L1/L2 for GLM, early stopping for trees)
-
-### 3. Survivorship Bias
-
-**Problem:** Only analyzing winners (e.g., profitable bettors who keep records).
-
-**Prevention:**
-
-- Track **all** bets, not just winners
-- Include deleted/abandoned strategies
-
-### 4. Recency Bias
-
-**Problem:** Overweighting recent performance ("hot hand" fallacy).
-
-**Prevention:**
-
-- Use season-long averages with recency weighting (exponential moving average)
-- Bayesian priors to shrink extreme recent samples
-
-### 5. Small Sample Fallacy
-
-**Problem:** Drawing conclusions from <100 bets.
-
-**Prevention:**
-
-- Require **300+ bets** for statistical claims
-- Report confidence intervals
-- Focus on **process** (CLV, calibration) over short-term results
-
----
-
-## Model Hierarchy
-
-### Baseline (M0)
-
-**Goal:** Simple, interpretable, hard to overfit.
-
-**Approach:**
-
-- Player's recent avg (last 10 games) ± 0.5 std dev
-- Compare to market line
-- If edge > 5%, bet
-
-**Evaluation:**
-
-- Brier score
-- CLV
-- ROI
-
-### Intermediate (M1)
-
-**Goal:** Incorporate matchup and context.
-
-**Approach:**
-
-- Generalized Linear Model (Poisson for counts, Gaussian for continuous)
-- Features: player recent, opponent defense, pace, rest days
-- Train on 2 seasons, validate on 1 season
-
-**Evaluation:**
-
-- Brier, log loss, calibration plots
-- Feature importance
-- Out-of-sample performance
-
-### Advanced (M2+)
-
-**Goal:** Ensemble, adaptive, market-aware.
-
-**Approach:**
-
-- XGBoost/LightGBM with 50+ features
-- Ensemble: GLM + tree + market signal
-- Adaptive weighting based on recent performance
-- Incorporate line movement (steam, reverse line movement)
-
-**Evaluation:**
-
-- Walk-forward cross-validation
-- CLV >2% on 500+ bets
-- Sharpe ratio >1.0
-
----
-
-## Conclusion
-
-The math of sports betting is **probabilistic, not deterministic**. We aim to:
-
-1. **Estimate probabilities** better than the market
-2. **Size bets** optimally (Kelly + exposure caps)
-3. **Evaluate performance** rigorously (Brier, CLV, ROI)
-4. **Avoid overconfidence** (wide CIs, process over results)
-
-Good process + positive CLV → long-term profitability (on average).
+Process discipline plus positive CLV is the only path to durable profitability. Every formula above links to a failure mode if misapplied; precision and humility are both required.
 
 ---
 

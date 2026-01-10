@@ -96,33 +96,41 @@ class TheOddsAPIProvider(OddsProvider):
         """Not implemented for odds provider."""
         raise NotImplementedError("OddsProvider does not support get_player_game_logs")
 
-    def get_game_odds(self, sport: str = "basketball_nba", **kwargs: Any) -> list[dict]:
+    def get_game_odds(
+        self, _sport: str = "basketball_nba", **kwargs: Any
+    ) -> list[dict]:
         """
         Get odds for games in a sport.
 
         Args:
-            sport: Sport key (e.g., "basketball_nba")
-            **kwargs: Additional params (e.g., dateFormat, markets, oddsFormat)
+            _sport: Sport key (e.g., "basketball_nba")
+            **kwargs: Additional params (e.g., regions, bookmakers, oddsFormat)
 
         Returns:
             List of game dicts with odds per sportsbook
         """
-        params = {"sport": sport}
+        params = {
+            "markets": "h2h",  # Head-to-head (moneyline)
+            "oddsFormat": "american",
+            "regions": "us",  # US sportsbooks
+        }
         params.update(kwargs)
 
-        data = self._request("/sports/basketball_nba/events", params)
+        data = self._request("/sports/basketball_nba/odds", params)
 
-        events = data.get("events", [])
+        # API returns list directly; handle both list and dict responses
+        events = data if isinstance(data, list) else data.get("events", [])
 
         normalized = []
         for event in events:
+            bookmakers = event.get("bookmakers", [])
             normalized.append(
                 {
                     "id": event.get("id"),
                     "home_team": event.get("home_team"),
                     "away_team": event.get("away_team"),
                     "commence_time": event.get("commence_time"),
-                    "bookmakers": event.get("bookmakers", []),
+                    "bookmakers": bookmakers,
                 }
             )
 

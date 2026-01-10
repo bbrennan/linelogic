@@ -46,9 +46,14 @@ class RecommendationEngine:
         # Placeholder: 52% (2% edge vs fair 50% odds) to generate some picks for testing
         return 0.52
 
-    def fetch_real_moneyline_odds(self) -> dict:
+    def fetch_real_moneyline_odds(self, date_str: str) -> dict:
         """
         Fetch real opening moneyline odds from TheOddsAPI.
+
+        Matches games by date (commence_time) and team names.
+
+        Args:
+            date_str: Date in YYYY-MM-DD format (to match games)
 
         Returns:
             Dict mapping {home_team_name -> home_odds, away_team_name -> away_odds}
@@ -63,7 +68,13 @@ class RecommendationEngine:
 
             odds_map = {}
 
+            # Build a lookup map: (home_short_name, away_short_name) -> odds
             for event in odds_data:
+                commence_time = event.get("commence_time", "")
+                # Check if game is on target date (e.g., 2026-01-11)
+                if not commence_time.startswith(date_str):
+                    continue
+
                 bookmakers = event.get("bookmakers", [])
 
                 # Use first sportsbook's opening odds (usually most accurate)
@@ -125,7 +136,7 @@ class RecommendationEngine:
             }
 
         # Fetch real opening odds from TheOddsAPI
-        odds_map = self.fetch_real_moneyline_odds()
+        odds_map = self.fetch_real_moneyline_odds(date_str)
 
         recommendations = []
         total_stake = 0.0
@@ -144,7 +155,19 @@ class RecommendationEngine:
 
             # Get real odds or fall back to stub 50/50
             home_odds = odds_map.get(home_team, {})
+            # Try fuzzy match if exact match fails (e.g., "Magic" vs "Orlando Magic")
+            if not home_odds:
+                for odds_team, odds_data in odds_map.items():
+                    if home_team.lower() in odds_team.lower():
+                        home_odds = odds_data
+                        break
+
             away_odds = odds_map.get(away_team, {})
+            if not away_odds:
+                for odds_team, odds_data in odds_map.items():
+                    if away_team.lower() in odds_team.lower():
+                        away_odds = odds_data
+                        break
 
             home_implied = home_odds.get("implied_prob", 0.50)
             away_implied = away_odds.get("implied_prob", 0.50)
@@ -268,13 +291,15 @@ class RecommendationEngine:
 
                 # Store odds snapshot if available
                 if rec["odds"]:
+                    rec_id = cursor.lastrowid
                     cursor.execute(
                         """
                         INSERT INTO odds_snapshots
                         (recommendation_id, source, captured_at, line, odds_american, odds_decimal, raw_payload_json)
-                        SELECT last_insert_rowid(),?, ?, ?, ?, ?, ?
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
+                            rec_id,
                             rec["odds"].get("source", "TheOddsAPI"),
                             datetime.datetime.now().isoformat(),
                             rec["market_prob"],

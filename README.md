@@ -61,12 +61,40 @@ make test-cov  # with coverage report
 # Show help
 linelogic --help
 
-# Run smoke test (future)
+# System health check
 linelogic check
 
-# Generate recommendations (future)
-linelogic recommend --sport nba --date 2026-01-15
+# Generate recommendations for a date
+linelogic recommend-daily --date 2026-01-15
+
+# Settle yesterday's picks (run after games complete)
+linelogic settle-daily --date 2026-01-14
+
+# With email notifications (requires SENDGRID_API_KEY)
+linelogic recommend-daily --date 2026-01-15 --email your.email@example.com
+linelogic settle-daily --date 2026-01-14 --email your.email@example.com --no-email  # skip email
+
+# View system logs
+tail -50 .linelogic/daily_job.log
+LOG_LEVEL=DEBUG linelogic recommend-daily --date 2026-01-15  # verbose logging
 ```
+
+### Daily Automated Runs
+
+LineLogic can run automatically every day without manual intervention:
+
+- **Local (LaunchAgent)**: 9 AM daily on your Mac (laptop must be on)
+  - [Setup Guide](docs/10_daily_scheduler.md)
+  - Commands: `./scripts/linelogic-job.sh {start|stop|restart|status|logs|unload}`
+
+- **Cloud (GitHub Actions)**: 9 AM UTC daily on GitHub servers (24/7, no laptop required)
+  - [Setup Guide](docs/11_github_actions_scheduler.md)
+  - Requires: BALLDONTLIE_API_KEY, ODDS_API_KEY secrets
+
+- **Email Notifications**: Daily summaries with bankroll tracking and results
+  - Requires: SendGrid free account (100 emails/day, sufficient for daily reports)
+  - [Setup Guide](docs/12_email_setup.md)
+  - Shows: Current bankroll, picks with edges, settlement outcomes and P&L
 
 ## Repository Structure
 
@@ -186,27 +214,31 @@ Architecture decisions in `adr/`:
 
 ## Roadmap
 
-### M0 (Current)
+### M0 (Current - POC)
 
-- ✅ Core math and odds utilities
-- ✅ Provider architecture with BALLDONTLIE + nba_api
+- ✅ Core math and odds utilities (vig removal, EV, Kelly sizing)
+- ✅ Provider architecture with BALLDONTLIE + TheOddsAPI
+- ✅ Real odds integration (9 sportsbooks)
 - ✅ Storage layer and evaluation metrics
-- 🚧 Basic CLI
+- ✅ CLI: recommend-daily, settle-daily commands
+- ✅ Paper trading workflow (log picks, track results)
+- ✅ Scheduled daily runs (LaunchAgent + GitHub Actions)
+- ✅ Email notifications with bankroll tracking and settlement reports
 
 ### M1 (Next)
 
 - [ ] Feature engineering for NBA player props
-- [ ] Baseline statistical models (simple over/under)
-- [ ] Paper trading workflow (log picks, track results)
+- [ ] Baseline statistical models (GLM, XGBoost on labeled picks)
 - [ ] Calibration dashboard
+- [ ] Backtest infrastructure
 
 ### M2 (Future)
 
-- [ ] NFL props adapter
-- [ ] Advanced models (GLM, XGBoost)
-- [ ] Streamlit UI
+- [ ] NFL/MLB props adapters
+- [ ] Advanced models and ensemble methods
+- [ ] Streamlit UI with live dashboard
 - [ ] Multi-game correlation analysis
-- [ ] Automated daily reports
+- [ ] Real money trading (with strict risk controls)
 
 ## Contributing
 

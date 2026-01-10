@@ -11,30 +11,67 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import plotly.graph_objects as go
 import plotly.express as px
+import os
 
 
 # Page config
 st.set_page_config(
     page_title="LineLogic Dashboard",
-    page_icon="📊",
+    page_icon="🎯",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# Styling
+# Enhanced Styling
 st.markdown(
     """
 <style>
-    .metric-card {
-        background-color: #0e1117;
+    /* Main container */
+    .main > div {
+        padding-top: 2rem;
+    }
+    
+    /* Metric cards */
+    [data-testid="stMetricValue"] {
+        font-size: 2rem;
+        font-weight: 700;
+    }
+    
+    [data-testid="stMetricDelta"] {
+        font-size: 0.875rem;
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Custom header */
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #3fb950, #58a6ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    
+    .sub-header {
+        color: #8b949e;
+        font-size: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    /* Tables */
+    [data-testid="stDataFrame"] {
         border: 1px solid #30363d;
         border-radius: 8px;
-        padding: 20px;
-        margin: 10px 0;
     }
-    .positive { color: #3fb950; }
-    .negative { color: #f85149; }
-    .neutral { color: #8b949e; }
+    
+    /* Dividers */
+    hr {
+        margin: 2rem 0;
+        border-color: #30363d;
+    }
 </style>
 """,
     unsafe_allow_html=True,
@@ -42,23 +79,49 @@ st.markdown(
 
 
 def get_db_path():
-    """Locate database file."""
-    paths = [
+    """Locate database file - works locally and on Streamlit Cloud."""
+    # Check if running on Streamlit Cloud
+    if os.path.exists("/mount/src"):
+        # Streamlit Cloud paths
+        cloud_paths = [
+            Path("/mount/src/linelogic/.linelogic/linelogic.db"),
+            Path("/mount/src/linelogic/linelogic.db"),
+        ]
+        for p in cloud_paths:
+            if p.exists():
+                return str(p)
+
+    # Local paths
+    local_paths = [
         Path(".linelogic/linelogic.db"),
-        Path("linelogic/.linelogic/linelogic.db"),
+        Path("../.linelogic/linelogic.db"),
         Path(".") / ".linelogic" / "linelogic.db",
     ]
-    for p in paths:
+    for p in local_paths:
         if p.exists():
             return str(p)
+
+    # Default fallback
     return ".linelogic/linelogic.db"
 
 
 @st.cache_resource
 def get_connection():
-    """Get SQLite connection."""
+    """Get SQLite connection with error handling."""
     db_path = get_db_path()
-    return sqlite3.connect(db_path)
+
+    if not Path(db_path).exists():
+        st.error(f"Database not found at: {db_path}")
+        st.info(
+            "The database will be created after the first daily run. Check back soon!"
+        )
+        st.stop()
+
+    try:
+        return sqlite3.connect(db_path, check_same_thread=False)
+    except Exception as e:
+        st.error(f"Failed to connect to database: {e}")
+        st.stop()
 
 
 def get_metrics():
@@ -228,34 +291,47 @@ def get_edge_distribution():
 
 
 # Main app
-st.title("📊 LineLogic Dashboard")
-st.caption("Real-time tracking of sports betting recommendations and results")
+st.markdown(
+    '<h1 class="main-header">🎯 LineLogic Dashboard</h1>', unsafe_allow_html=True
+)
+st.markdown(
+    '<p class="sub-header">Real-time tracking of sports betting recommendations and performance analytics</p>',
+    unsafe_allow_html=True,
+)
 
 # Metrics row
-metrics = get_metrics()
+try:
+    metrics = get_metrics()
+except Exception as e:
+    st.error(f"Error loading metrics: {e}")
+    st.info("Ensure the database has been populated by running the daily job.")
+    st.stop()
 
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 with col1:
     st.metric(
         "Total Picks",
-        metrics["total_picks"],
-        delta=f"Settled: {metrics['settled']}",
+        f"{metrics['total_picks']:,}",
+        delta=f"{metrics['settled']} settled",
     )
 
 with col2:
+    win_pct = metrics["win_pct"]
     st.metric(
         "Win Rate (30d)",
-        f"{metrics['win_pct']:.1f}%",
-        delta="Last 30 days",
+        f"{win_pct:.1f}%",
+        delta=f"{'↑' if win_pct > 50 else '↓'} vs 50%",
+        delta_color="normal" if win_pct > 50 else "inverse",
     )
 
 with col3:
-    pnl_delta = "✓" if metrics["pnl"] >= 0 else "✗"
+    pnl = metrics["pnl"]
     st.metric(
         "P&L (30d)",
-        f"${metrics['pnl']:,.2f}",
-        delta=pnl_delta,
+        f"${pnl:,.2f}",
+        delta=f"{'Profit' if pnl >= 0 else 'Loss'}",
+        delta_color="normal" if pnl >= 0 else "inverse",
     )
 
 with col4:
@@ -272,12 +348,11 @@ with col5:
     )
 
 with col6:
-    total_settled = metrics["settled"]
     picks_remaining = metrics["total_picks"] - metrics["settled"]
     st.metric(
-        "Unsettled",
+        "Pending",
         picks_remaining,
-        delta=f"{picks_remaining} pending",
+        delta="unsettled",
     )
 
 # Charts section
@@ -370,21 +445,60 @@ with col_edge1:
 
 # Recent picks table
 st.divider()
-st.subheader("Recent Picks")
+st.subheader("📋 Recent Picks")
 
-recent = get_recent_picks(15)
+recent = get_recent_picks(20)
 if len(recent) > 0:
+    # Format the dataframe for better display
+    recent_display = recent.copy()
+    recent_display["created_at"] = pd.to_datetime(
+        recent_display["created_at"]
+    ).dt.strftime("%Y-%m-%d %H:%M")
+
+    # Color code results
+    def highlight_result(row):
+        if row["result"] == 1:
+            return ["background-color: rgba(63, 185, 80, 0.1)"] * len(row)
+        elif row["result"] == 0:
+            return ["background-color: rgba(248, 81, 73, 0.1)"] * len(row)
+        else:
+            return [""] * len(row)
+
     st.dataframe(
-        recent,
+        recent_display.style.apply(highlight_result, axis=1),
         use_container_width=True,
         hide_index=True,
+        column_config={
+            "created_at": "Date",
+            "selection": "Team",
+            "model_prob_pct": st.column_config.NumberColumn("Model %", format="%.1f%%"),
+            "market_prob_pct": st.column_config.NumberColumn(
+                "Market %", format="%.1f%%"
+            ),
+            "edge_pct": st.column_config.NumberColumn("Edge", format="%.2f%%"),
+            "stake": st.column_config.NumberColumn("Stake", format="$%.2f"),
+            "result": st.column_config.TextColumn("Result"),
+            "pnl": st.column_config.TextColumn("P&L"),
+        },
     )
 else:
-    st.info("No picks recorded yet.")
+    st.info("No picks recorded yet. Check back after the first daily run!")
 
-# Footer
+# Footer with system status
 st.divider()
+col_footer1, col_footer2, col_footer3 = st.columns(3)
+
+with col_footer1:
+    st.caption("🤖 **LineLogic** — Automated Sports Betting Analytics")
+
+with col_footer2:
+    st.caption(f"📊 Database: `{Path(get_db_path()).name}`")
+
+with col_footer3:
+    st.caption("📧 Daily reports sent to bbrennan83@gmail.com")
+
+# Refresh indicator
+st.caption(f"⏱️ Last refreshed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}")
 st.caption(
-    "🤖 LineLogic — Automated sports betting analysis. Data updates after each daily run."
+    "💡 Data updates automatically after each daily GitHub Actions run (9:00 UTC)"
 )
-st.caption("Last updated: Daily summaries sent to bbrennan83@gmail.com")

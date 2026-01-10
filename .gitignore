@@ -83,6 +83,7 @@ data/processed/
 models/checkpoints/
 experiments/
 .linelogic/
+!.linelogic/linelogic.db
 
 # macOS
 .DS_Store

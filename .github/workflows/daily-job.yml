@@ -42,15 +42,17 @@ jobs:
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+                  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
               run: |
-                  python -m linelogic.app.cli recommend-daily --date ${{ steps.dates.outputs.today }}
+                  python -m linelogic.app.cli recommend-daily --date ${{ steps.dates.outputs.today }} --email bbrennan83@gmail.com
 
             - name: Run settle-daily
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+                  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
               run: |
-                  python -m linelogic.app.cli settle-daily --date ${{ steps.dates.outputs.yesterday }}
+                  python -m linelogic.app.cli settle-daily --date ${{ steps.dates.outputs.yesterday }} --email bbrennan83@gmail.com
 
             - name: Commit and push database
               run: |

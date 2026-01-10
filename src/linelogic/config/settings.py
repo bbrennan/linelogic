@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     # Optional: Other providers (future)
     odds_api_key: str = Field(default="", description="The Odds API key")
     weatherapi_key: str = Field(default="", description="WeatherAPI key")
+    sendgrid_api_key: str = Field(default="", description="SendGrid API key for email")
 
 
 # Global settings instance

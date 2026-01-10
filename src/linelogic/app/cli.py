@@ -75,12 +75,17 @@ def check() -> None:
 
 @main.command("recommend-daily")
 @click.option("--date", required=True, help="Date in YYYY-MM-DD format")
-def recommend_daily(date: str) -> None:
+@click.option(
+    "--email", default="bbrennan83@gmail.com", help="Email to send summary to"
+)
+@click.option("--no-email", is_flag=True, help="Skip email sending")
+def recommend_daily(date: str, email: str, no_email: bool) -> None:
     """
     Generate paper recommendations for a date.
 
     Fetches games, runs stub model, computes edge/stake, writes to SQLite.
     Mode must be 'paper' (controlled via .env MODE setting).
+    Optionally sends HTML email summary with bankroll and picks.
     """
     try:
         from linelogic.app.recommend import RecommendationEngine
@@ -105,6 +110,31 @@ def recommend_daily(date: str) -> None:
             click.echo("   No picks generated (no +edge bets found)")
 
         click.echo("\n✅ Recommendations saved to database")
+
+        # Send email summary if requested
+        if not no_email and result["count"] > 0:
+            try:
+                from linelogic.eval.summary import SummaryGenerator
+                from linelogic.email_sender import EmailSender
+
+                summary_gen = SummaryGenerator()
+                html_email, _ = summary_gen.generate_html_summary(date, date)
+                summary_gen.close()
+
+                email_sender = EmailSender()
+                if email_sender.send_email(
+                    to_email=email,
+                    subject=f"LineLogic Daily Picks - {date}",
+                    html_content=html_email,
+                ):
+                    click.echo(f"📧 Summary emailed to {email}")
+                else:
+                    click.echo(f"⚠️  Email send failed")
+            except ValueError as exc:
+                click.echo(f"⚠️  Email skipped: {exc}")
+            except Exception as exc:
+                click.echo(f"⚠️  Email error: {exc}")
+
     except ValueError as exc:
         click.echo(f"❌ Error: {exc}")
     except Exception as exc:
@@ -113,11 +143,16 @@ def recommend_daily(date: str) -> None:
 
 @main.command("settle-daily")
 @click.option("--date", required=True, help="Date in YYYY-MM-DD format")
-def settle_daily(date: str) -> None:
+@click.option(
+    "--email", default="bbrennan83@gmail.com", help="Email to send summary to"
+)
+@click.option("--no-email", is_flag=True, help="Skip email sending")
+def settle_daily(date: str, email: str, no_email: bool) -> None:
     """
     Settle recommendations for a date (stub: ingest results, compute ROI/Kelly).
 
     This is a placeholder; integrate real sportsbook result feeds in v2+.
+    Optionally sends HTML email summary with settlement results and bankroll.
     """
     try:
         from linelogic.app.settle import SettlementEngine
@@ -131,6 +166,35 @@ def settle_daily(date: str) -> None:
         click.echo(f"   ROI: {result['roi_percent']:.2%}")
 
         click.echo("\n✅ Results saved to database")
+
+        # Send email summary if requested
+        if not no_email and result["settled_count"] > 0:
+            try:
+                from linelogic.eval.summary import SummaryGenerator
+                from linelogic.email_sender import EmailSender
+                from datetime import datetime, timedelta
+
+                yesterday = (
+                    datetime.strptime(date, "%Y-%m-%d") - timedelta(days=1)
+                ).strftime("%Y-%m-%d")
+
+                summary_gen = SummaryGenerator()
+                _, html_email = summary_gen.generate_html_summary(date, yesterday)
+                summary_gen.close()
+
+                email_sender = EmailSender()
+                if email_sender.send_email(
+                    to_email=email,
+                    subject=f"LineLogic Settlement Report - {yesterday}",
+                    html_content=html_email,
+                ):
+                    click.echo(f"📧 Summary emailed to {email}")
+                else:
+                    click.echo(f"⚠️  Email send failed")
+            except ValueError as exc:
+                click.echo(f"⚠️  Email skipped: {exc}")
+            except Exception as exc:
+                click.echo(f"⚠️  Email error: {exc}")
     except Exception as exc:
         click.echo(f"❌ Error: {exc}")
 

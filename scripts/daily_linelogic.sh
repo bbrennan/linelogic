@@ -27,8 +27,8 @@ cd "$LINELOGIC_HOME"
 log "=== Starting daily LineLogic job ==="
 
 # Run recommend-daily for today
-log "Running: linelogic recommend-daily --date $TODAY"
-if .venv/bin/python -m linelogic.app.cli recommend-daily --date "$TODAY" >> "$SCRIPT_LOG" 2>&1; then
+log "Running: linelogic recommend-daily --date $TODAY --email bbrennan83@gmail.com"
+if .venv/bin/python -m linelogic.app.cli recommend-daily --date "$TODAY" --email bbrennan83@gmail.com >> "$SCRIPT_LOG" 2>&1; then
     log "✅ recommend-daily succeeded"
 else
     log "❌ recommend-daily failed"
@@ -38,8 +38,8 @@ fi
 sleep 2
 
 # Run settle-daily for yesterday (to settle completed games)
-log "Running: linelogic settle-daily --date $YESTERDAY"
-if .venv/bin/python -m linelogic.app.cli settle-daily --date "$YESTERDAY" >> "$SCRIPT_LOG" 2>&1; then
+log "Running: linelogic settle-daily --date $YESTERDAY --email bbrennan83@gmail.com"
+if .venv/bin/python -m linelogic.app.cli settle-daily --date "$YESTERDAY" --email bbrennan83@gmail.com >> "$SCRIPT_LOG" 2>&1; then
     log "✅ settle-daily succeeded"
 else
     log "❌ settle-daily failed"

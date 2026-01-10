@@ -24,7 +24,7 @@ class PaidTierRequiredError(Exception):
         self.method = method
         super().__init__(
             f"{provider} {method}() requires {required_tier} tier or higher. "
-            f"Visit https://www.balldontlie.io/pricing to upgrade."
+            "Visit https://www.balldontlie.io/pricing to upgrade."
         )
 
 

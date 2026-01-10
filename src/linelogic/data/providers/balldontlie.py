@@ -9,6 +9,8 @@ Implements StatsProvider interface with:
 See: https://www.balldontlie.io/home.html
 """
 
+import logging
+import time
 from typing import Any
 
 import requests
@@ -21,6 +23,8 @@ from linelogic.data.providers.base import (
     StatsProvider,
 )
 from linelogic.data.rate_limit import RateLimiter
+
+logger = logging.getLogger("linelogic.providers.balldontlie")
 
 
 class BalldontlieProvider(StatsProvider):
@@ -65,8 +69,15 @@ class BalldontlieProvider(StatsProvider):
         self.tier = tier or settings.balldontlie_tier
         self.rpm = rpm or settings.balldontlie_rpm
 
-        self.cache = cache or Cache()
+        self.cache = cache or Cache(
+            settings.cache_db_path, default_ttl=settings.cache_ttl_seconds
+        )
         self.rate_limiter = rate_limiter or RateLimiter(self.rpm)
+
+        # Resilience configuration
+        self.request_timeout = 5
+        self.max_retries = 2
+        self.backoff_seconds = 1
 
         self.session = requests.Session()
         if self.api_key:
@@ -99,23 +110,44 @@ class BalldontlieProvider(StatsProvider):
         # Acquire rate limit token
         self.rate_limiter.acquire(blocking=True)
 
-        # Make request
         url = f"{self.BASE_URL}{endpoint}"
-        response = self.session.get(url, params=params)
 
-        if response.status_code != 200:
-            raise ProviderAPIError(
-                f"BALLDONTLIE API error: {response.status_code} {response.text}"
-            )
+        for attempt in range(self.max_retries + 1):
+            try:
+                start_time = time.time()
+                response = self.session.get(
+                    url, params=params, timeout=self.request_timeout
+                )
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"API request completed in {elapsed:.2f}s: {endpoint} (attempt {attempt + 1})"
+                )
 
-        data = response.json()
+                if response.status_code != 200:
+                    logger.error(f"API error {response.status_code}: {response.text}")
+                    raise ProviderAPIError(
+                        f"BALLDONTLIE API error: {response.status_code} {response.text}"
+                    )
+
+                data = response.json()
+                break
+            except Exception:  # noqa: BLE001 keep broad for HTTP/JSON errors
+                if attempt == self.max_retries:
+                    logger.error("Max retries exceeded")
+                    raise
+                wait_time = self.backoff_seconds * (attempt + 1)
+                logger.warning(
+                    f"Request failed (attempt {attempt + 1}/{self.max_retries + 1}), "
+                    f"backoff {wait_time}s"
+                )
+                time.sleep(wait_time)
 
         # Cache response
         self.cache.set("balldontlie", endpoint, params, data)
 
         return data
 
-    def get_players(self, **kwargs: Any) -> list[dict]:
+    def get_players(self, **_kwargs: Any) -> list[dict]:
         """
         Get all NBA players.
 
@@ -161,7 +193,7 @@ class BalldontlieProvider(StatsProvider):
 
         return all_players
 
-    def get_teams(self, **kwargs: Any) -> list[dict]:
+    def get_teams(self, **_kwargs: Any) -> list[dict]:
         """
         Get all NBA teams.
 
@@ -190,7 +222,7 @@ class BalldontlieProvider(StatsProvider):
 
         return normalized
 
-    def get_games(self, date: str, **kwargs: Any) -> list[dict]:
+    def get_games(self, date: str, **_kwargs: Any) -> list[dict]:
         """
         Get games for a specific date.
 
@@ -235,7 +267,7 @@ class BalldontlieProvider(StatsProvider):
         return normalized
 
     def get_player_game_logs(
-        self, player_id: str | int, season: str, **kwargs: Any
+        self, player_id: str | int, season: str, **_kwargs: Any
     ) -> list[dict]:
         """
         Get game logs for a player in a season.

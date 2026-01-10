@@ -48,8 +48,16 @@ def kelly_fraction(prob_win: float, odds_decimal: float) -> float:
         return 0.0
 
     b = odds_decimal - 1
+
+    # Apply a small volatility haircut on plus-money prices to avoid overbetting
+    if odds_decimal > 2.0:
+        b *= 0.8
     q = 1 - prob_win
     kelly = (prob_win * b - q) / b
+
+    # For marginal edges, haircut further to avoid betting noise
+    if kelly < 0.05:
+        kelly *= 0.5
 
     # Return 0 if no edge (kelly <= 0)
     return max(kelly, 0.0)

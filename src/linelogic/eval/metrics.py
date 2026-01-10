@@ -59,7 +59,8 @@ def brier_score(predictions: list[float], outcomes: list[int]) -> float:
             raise ValueError(f"Outcome must be 0 or 1, got {outcome}")
 
     squared_errors = [
-        (pred - outcome) ** 2 for pred, outcome in zip(predictions, outcomes)
+        (pred - outcome) ** 2
+        for pred, outcome in zip(predictions, outcomes, strict=True)
     ]
     return sum(squared_errors) / len(squared_errors)
 
@@ -121,7 +122,7 @@ def log_loss(predictions: list[float], outcomes: list[int]) -> float:
 
     log_losses = [
         -(y * math.log(p) + (1 - y) * math.log(1 - p))
-        for p, y in zip(clipped_preds, outcomes)
+        for p, y in zip(clipped_preds, outcomes, strict=True)
     ]
 
     return sum(log_losses) / len(log_losses)
@@ -200,7 +201,7 @@ def calibration_buckets(
         # Collect predictions in this bucket
         in_bucket = [
             (pred, outcome)
-            for pred, outcome in zip(predictions, outcomes)
+            for pred, outcome in zip(predictions, outcomes, strict=True)
             if min_prob <= pred < max_prob or (i == n_buckets - 1 and pred == max_prob)
         ]
 

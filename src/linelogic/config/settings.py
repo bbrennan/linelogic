@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     log_level: str = Field(
         default="INFO", description="Logging level: DEBUG, INFO, WARNING, ERROR"
     )
+    mode: str = Field(default="paper", description="Operating mode: paper or live")
     user_agent: str = Field(
         default="LineLogic/0.1.0 (github.com/linelogic/linelogic)",
         description="User-Agent for HTTP requests",

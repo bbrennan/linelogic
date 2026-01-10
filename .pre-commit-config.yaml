@@ -25,3 +25,11 @@ repos:
       - id: mypy
         additional_dependencies: [pydantic>=2.5.0, types-requests]
         args: [--ignore-missing-imports]
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: python -m pytest
+        language: system
+        pass_filenames: false

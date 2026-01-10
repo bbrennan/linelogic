@@ -5,7 +5,6 @@ Tests for portfolio/bankroll management.
 import pytest
 
 from linelogic.portfolio.bankroll import (
-    ExposureCaps,
     apply_per_bet_cap,
     calculate_stake_with_caps,
     check_correlation_heuristic,

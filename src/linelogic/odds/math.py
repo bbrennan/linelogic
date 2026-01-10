@@ -60,7 +60,8 @@ def implied_prob_to_american(prob: float) -> int:
     elif prob < 0.5:
         return int(round((100 / prob) - 100))
     else:
-        return int(round((-100 * prob) / (prob - 1)))
+        # Negative odds for favorites: more than 50% implied probability
+        return int(round(-(100 * prob) / (1 - prob)))
 
 
 def decimal_to_implied_prob(decimal_odds: float) -> float:

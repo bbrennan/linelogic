@@ -7,6 +7,7 @@ Uses mocked HTTP responses (no real API calls).
 import pytest
 import responses
 
+from linelogic.data.cache import Cache
 from linelogic.data.providers.balldontlie import BalldontlieProvider
 from linelogic.data.providers.base import PaidTierRequiredError
 
@@ -15,7 +16,7 @@ class TestBalldontlieProvider:
     """Test BALLDONTLIE provider with mocked responses."""
 
     @responses.activate
-    def test_get_teams(self):
+    def test_get_teams(self, tmp_path):
         # Mock API response
         responses.add(
             responses.GET,
@@ -43,7 +44,9 @@ class TestBalldontlieProvider:
             status=200,
         )
 
-        provider = BalldontlieProvider(tier="free", rpm=60)
+        provider = BalldontlieProvider(
+            tier="free", rpm=60, cache=Cache(str(tmp_path / "cache.db"))
+        )
         teams = provider.get_teams()
 
         assert len(teams) == 2
@@ -86,7 +89,7 @@ class TestBalldontlieProvider:
         assert games[0]["home_score"] == 110
 
     @responses.activate
-    def test_cache_usage(self):
+    def test_cache_usage(self, tmp_path):
         # Mock API response
         responses.add(
             responses.GET,
@@ -95,7 +98,9 @@ class TestBalldontlieProvider:
             status=200,
         )
 
-        provider = BalldontlieProvider(tier="free", rpm=60)
+        provider = BalldontlieProvider(
+            tier="free", rpm=60, cache=Cache(str(tmp_path / "cache.db"))
+        )
 
         # First call should hit API
         provider.get_teams()

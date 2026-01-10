@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from linelogic.config.settings import settings
 from linelogic.data.cache import Cache
 
 
@@ -21,6 +22,16 @@ def temp_cache():
 
 class TestCache:
     """Test cache functionality."""
+
+    def test_cache_default_path_uses_tempdir(self, monkeypatch, tmp_path):
+        # Force the cache to use a predictable directory via settings
+        monkeypatch.setattr(settings, "cache_db_path", str(tmp_path / "cache.db"))
+
+        cache = Cache()
+
+        # Database should live under the configured path and be initialized
+        assert Path(cache.db_path) == tmp_path / "cache.db"
+        assert Path(cache.db_path).exists()
 
     def test_cache_set_and_get(self, temp_cache):
         # Set a value

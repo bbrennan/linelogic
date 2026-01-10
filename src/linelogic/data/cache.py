@@ -6,9 +6,16 @@ Caches responses to minimize API calls and costs.
 
 import hashlib
 import json
+import logging
 import sqlite3
 import time
+import uuid
 from pathlib import Path
+from tempfile import gettempdir
+
+from linelogic.config.settings import settings
+
+logger = logging.getLogger("linelogic.cache")
 
 
 class Cache:
@@ -18,7 +25,7 @@ class Cache:
     Cache key format: {provider}:{endpoint}:{params_hash}
     """
 
-    def __init__(self, db_path: str = ".linelogic/cache.db", default_ttl: int = 86400):
+    def __init__(self, db_path: str | None = None, default_ttl: int = 86400):
         """
         Initialize cache.
 
@@ -26,6 +33,16 @@ class Cache:
             db_path: Path to cache SQLite database
             default_ttl: Default TTL in seconds (default: 24 hours)
         """
+        # Use configured cache path by default; fall back to a temp-backed DB for tests
+        if db_path is None:
+            configured_path = settings.cache_db_path or ""
+            if configured_path:
+                db_path = configured_path
+            else:
+                db_path = str(
+                    Path(gettempdir()) / f"linelogic-cache-{uuid.uuid4().hex}.db"
+                )
+
         self.db_path = db_path
         self.default_ttl = default_ttl
 
@@ -103,6 +120,7 @@ class Cache:
         conn.close()
 
         if row is None:
+            logger.debug(f"Cache MISS: {provider}/{endpoint}")
             return None
 
         value_str, fetched_at, ttl_seconds = row
@@ -110,9 +128,11 @@ class Cache:
         # Check if expired
         if time.time() - fetched_at > ttl_seconds:
             # Expired, delete and return None
+            logger.debug(f"Cache EXPIRED: {provider}/{endpoint}")
             self.delete(provider, endpoint, params)
             return None
 
+        logger.debug(f"Cache HIT: {provider}/{endpoint}")
         return json.loads(value_str)
 
     def set(

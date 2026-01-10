@@ -1,0 +1,24 @@
+# LineLogic Code Owners
+# These owners will be requested for review when someone opens a pull request
+
+# Default owners for everything
+* @linelogic/core-team
+
+# Documentation
+/docs/ @linelogic/core-team
+*.md @linelogic/core-team
+
+# Core math and models
+/src/linelogic/odds/ @linelogic/quant-team
+/src/linelogic/models/ @linelogic/quant-team
+/src/linelogic/eval/ @linelogic/quant-team
+/src/linelogic/portfolio/ @linelogic/quant-team
+
+# Data providers and infrastructure
+/src/linelogic/data/ @linelogic/data-team
+/src/linelogic/storage/ @linelogic/data-team
+
+# Configuration and security
+/src/linelogic/config/ @linelogic/core-team
+.env.example @linelogic/core-team
+SECURITY.md @linelogic/core-team

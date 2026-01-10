@@ -43,6 +43,9 @@ jobs:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
                   SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+                  SMTP_USER: ${{ secrets.SMTP_USER }}
+                  SMTP_PASS: ${{ secrets.SMTP_PASS }}
+                  FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
               run: |
                   python -m linelogic.app.cli recommend-daily --date ${{ steps.dates.outputs.today }} --email bbrennan83@gmail.com
 
@@ -51,6 +54,9 @@ jobs:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
                   SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+                  SMTP_USER: ${{ secrets.SMTP_USER }}
+                  SMTP_PASS: ${{ secrets.SMTP_PASS }}
+                  FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
               run: |
                   python -m linelogic.app.cli settle-daily --date ${{ steps.dates.outputs.yesterday }} --email bbrennan83@gmail.com
 

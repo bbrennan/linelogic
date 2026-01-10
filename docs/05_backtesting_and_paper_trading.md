@@ -338,14 +338,14 @@ CREATE TABLE results (
 - p = 0.60, q = 0.40
 - Kelly = (0.60 × 0.9 - 0.40) / 0.9 = 0.144 (14.4%)
 - Fractional Kelly (0.25): 0.144 × 0.25 = 0.036 (3.6%)
-- Bankroll: $10,000
-- Stake: $360
+- Bankroll: $1,000
+- Stake: $36
 
 **Log recommendation:**
 
 ```sql
 INSERT INTO recommendations (created_at, sport, game_id, market, selection, model_prob, market_prob, edge, stake_suggested, kelly_fraction, bankroll_at_time, model_version)
-VALUES ('2026-01-15 10:00:00', 'NBA', 'LAL_BOS_20260115', 'player_points_over_under', 'LeBron James Over 25.5', 0.60, 0.50, 0.10, 360.00, 0.25, 10000.00, 'baseline_v1');
+VALUES ('2026-01-15 10:00:00', 'NBA', 'LAL_BOS_20260115', 'player_points_over_under', 'LeBron James Over 25.5', 0.60, 0.50, 0.10, 36.00, 0.25, 1000.00, 'baseline_v1');
 ```
 
 **Capture odds:**
@@ -359,13 +359,13 @@ VALUES (1, 'DraftKings', '2026-01-15 10:00:00', 25.5, -110, 1.91);
 
 ```sql
 INSERT INTO results (recommendation_id, settled_at, outcome_win_bool, outcome_value_numeric, profit_loss)
-VALUES (1, '2026-01-15 22:30:00', 1, 28.0, 327.27);  -- $360 × (1.91 - 1) = $327.27 profit
+VALUES (1, '2026-01-15 22:30:00', 1, 28.0, 32.76);  -- $36 × (1.91 - 1) = $32.76 profit
 ```
 
 **Update bankroll:**
 
 ```
-$10,000 + $327.27 = $10,327.27
+$1,000 + $32.76 = $1,032.76
 ```
 
 ---
@@ -509,11 +509,11 @@ SUMMARY
 Total bets:       48
 Win rate:         54.2% (26 wins, 22 losses)
 ROI:              7.3%
-Total staked:     $9,600
-Total profit:     $701
-Bankroll (start): $10,000
-Bankroll (end):   $10,701
-Max drawdown:     -$420 (4.2%)
+Total staked:     $960
+Total profit:     $70.10
+Bankroll (start): $1,000
+Bankroll (end):   $1,070.10
+Max drawdown:     -$42 (4.2%)
 
 CALIBRATION
 -----------

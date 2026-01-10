@@ -1,0 +1,75 @@
+name: LineLogic Daily Job
+
+# Run daily at 9:00 AM UTC (or adjust as needed)
+# 9 UTC = 4 AM EST = 1 AM PST
+# To change time, edit the cron schedule below
+on:
+    schedule:
+        - cron: "0 9 * * *" # 9 AM UTC daily
+
+    # Allow manual trigger from GitHub UI
+    workflow_dispatch:
+
+jobs:
+    daily-recommendations:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+                  cache: "pip"
+
+            - name: Install dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install -e .
+
+            - name: Get dates
+              id: dates
+              run: |
+                  TODAY=$(date -u +%Y-%m-%d)
+                  YESTERDAY=$(date -u -d "1 day ago" +%Y-%m-%d)
+                  echo "today=$TODAY" >> $GITHUB_OUTPUT
+                  echo "yesterday=$YESTERDAY" >> $GITHUB_OUTPUT
+                  echo "Dates: TODAY=$TODAY, YESTERDAY=$YESTERDAY"
+
+            - name: Run recommend-daily
+              env:
+                  BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+                  ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+              run: |
+                  python -m linelogic.app.cli recommend-daily --date ${{ steps.dates.outputs.today }}
+
+            - name: Run settle-daily
+              env:
+                  BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+                  ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+              run: |
+                  python -m linelogic.app.cli settle-daily --date ${{ steps.dates.outputs.yesterday }}
+
+            - name: Commit and push database
+              run: |
+                  git config --local user.email "action@github.com"
+                  git config --local user.name "LineLogic Bot"
+
+                  # Only commit if database changed
+                  if git diff --quiet .linelogic/linelogic.db; then
+                    echo "No changes to database"
+                  else
+                    git add .linelogic/linelogic.db
+                    git commit -m "chore: Update database from daily job ($(date -u +%Y-%m-%d))"
+                    git push
+                  fi
+
+            - name: Upload logs as artifact
+              if: always()
+              uses: actions/upload-artifact@v3
+              with:
+                  name: linelogic-logs
+                  path: .linelogic/linelogic.log
+                  retention-days: 7

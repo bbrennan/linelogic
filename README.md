@@ -95,21 +95,25 @@ linelogic/
 
 ### Sports Stats (Primary: NBA)
 
-- **BALLDONTLIE** (free tier): Players, teams, games
-  - Rate limit: 5 req/min
+-**BALLDONTLIE** (free + paid tiers): ✅ Legal, compliant, primary NBA source
+  - Free tier: 5 req/min, players/teams/games
+  - All-Star ($5/mo): 30 req/min, player stats (required for M1)
   - Tier gating: paid endpoints raise `PaidTierRequiredError`
-- **nba_api** (optional): Behind `USE_NBA_API` flag for research/backfill
-  - Unofficial scraper, use with caution
+- **TheSportsDB**: Multi-sport fallback, non-commercial use OK
+- **nflverse** (M2): Open-source NFL historical data
+- **Retrosheet/Chadwick** (M2): Open-source MLB historical data
 
 ### Future Integrations
 
-- Odds: The Odds API, BetOnline, Pinnacle
-- Weather: WeatherAPI, OpenWeather
-- Injuries: ESPN, CBS, team sources
-- Social/News: Twitter API, news aggregators
-- Scheduling: NBA API, ESPN
+-Odds: The Odds API ($20/mo for M1)
+- Weather: WeatherAPI (free, M2 for outdoor sports)
+- Injuries: Manual checks (M0/M1), licensed feeds (M2+)
+- Social/News: Twitter API, NewsAPI (M3)
+- Licensed providers: Sportradar, Genius Sports (M4, $3k+/mo)
 
 See [docs/04_data_sources.md](docs/04_data_sources.md) for details.
++
+**⚠️ Legal Compliance:** nba_api removed due to NBA.com ToS violations. LineLogic uses only legally compliant data sources.
 
 ## Key Concepts
 

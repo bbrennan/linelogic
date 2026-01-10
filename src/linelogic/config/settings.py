@@ -29,11 +29,6 @@ class Settings(BaseSettings):
         default=5, description="BALLDONTLIE rate limit (requests per minute)"
     )
 
-    # Feature Flags
-    use_nba_api: bool = Field(
-        default=False, description="Enable nba_api provider (unofficial)"
-    )
-
     # Cache Settings
     cache_ttl_seconds: int = Field(
         default=86400, description="Default cache TTL (24 hours)"

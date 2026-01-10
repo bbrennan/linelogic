@@ -47,7 +47,6 @@ def check() -> None:
     click.echo(f"   - BALLDONTLIE tier: {settings.balldontlie_tier}")
     click.echo(f"   - Rate limit: {settings.balldontlie_rpm} rpm")
     click.echo(f"   - Cache TTL: {settings.cache_ttl_seconds}s")
-    click.echo(f"   - USE_NBA_API: {settings.use_nba_api}")
 
     # Check providers
     try:
@@ -61,15 +60,6 @@ def check() -> None:
         click.echo(f"✅ BALLDONTLIE API working ({len(teams)} teams fetched)")
     except Exception as e:
         click.echo(f"⚠️  BALLDONTLIE provider error: {e}")
-
-    if settings.use_nba_api:
-        try:
-            from linelogic.data.providers.nba_api_provider import NbaApiProvider
-
-            provider = NbaApiProvider()
-            click.echo("✅ nba_api provider initialized")
-        except Exception as e:
-            click.echo(f"⚠️  nba_api provider error: {e}")
 
     click.echo("=" * 50)
     click.echo("✅ System check complete!")

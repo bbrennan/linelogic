@@ -42,6 +42,13 @@ jobs:
               run: |
                   python scripts/infer_daily.py --date ${{ steps.dates.outputs.today }} --output predictions_${{ steps.dates.outputs.today }}.csv --verbose
 
+            - name: Store predictions to database
+              env:
+                  BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+                  ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+              run: |
+                  python -m linelogic.app.cli recommend-daily --date ${{ steps.dates.outputs.today }} --no-email
+
             - name: Run settle-daily
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
@@ -65,7 +72,7 @@ jobs:
                   git config --local user.email "action@github.com"
                   git config --local user.name "LineLogic Bot"
 
-                  git add predictions_*.csv .linelogic/games_cache.csv predictions_log.csv 2>/dev/null || true
+                  git add predictions_*.csv .linelogic/games_cache.csv .linelogic/linelogic.db predictions_log.csv 2>/dev/null || true
 
                   if git diff --cached --quiet; then
                     echo "No changes to commit"

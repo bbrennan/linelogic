@@ -4,7 +4,14 @@ Tests for evaluation metrics.
 
 import pytest
 
-from linelogic.eval.metrics import brier_score, calibration_buckets, clv, log_loss
+from linelogic.eval.metrics import (
+    brier_score,
+    calibration_buckets,
+    calibration_errors,
+    calibration_table,
+    clv,
+    log_loss,
+)
 
 
 class TestBrierScore:
@@ -87,6 +94,37 @@ class TestCalibrationBuckets:
     def test_calibration_buckets_length_mismatch(self):
         with pytest.raises(ValueError):
             calibration_buckets([0.5], [1, 0], n_buckets=10)
+
+
+class TestCalibrationErrors:
+    def test_calibration_errors_empty(self):
+        ece, mce = calibration_errors([], [], n_buckets=10)
+        assert ece == pytest.approx(0.0)
+        assert mce == pytest.approx(0.0)
+
+    def test_calibration_errors_reasonable_range(self):
+        predictions = [0.2, 0.25, 0.8, 0.85]
+        outcomes = [0, 0, 1, 1]
+        ece, mce = calibration_errors(predictions, outcomes, n_buckets=5)
+        assert 0.0 <= ece <= 1.0
+        assert 0.0 <= mce <= 1.0
+
+    def test_calibration_table_schema(self):
+        predictions = [0.1, 0.9]
+        outcomes = [0, 1]
+        rows = calibration_table(predictions, outcomes, n_buckets=2)
+        assert isinstance(rows, list)
+        if rows:
+            row = rows[0]
+            assert set(row.keys()) == {
+                "min_prob",
+                "max_prob",
+                "avg_predicted",
+                "wins",
+                "total",
+                "empirical_win_rate",
+                "abs_gap",
+            }
 
 
 class TestCLV:

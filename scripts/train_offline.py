@@ -33,6 +33,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+import mlflow
+import mlflow.sklearn
 
 # Load environment variables from .env file
 load_dotenv()
@@ -63,6 +65,10 @@ from linelogic.data.player_stats_bdl import load_player_stats_cache
 from linelogic.data.team_season_avgs import load_team_season_avgs
 from linelogic.data.odds_cache import load_odds_cache
 from linelogic.data.player_injuries_cache import load_player_injuries_cache
+from linelogic.eval.metrics import (
+    calibration_errors as ll_calibration_errors,
+    calibration_table as ll_calibration_table,
+)
 
 
 def fetch_historical_games(
@@ -328,7 +334,7 @@ def evaluate_split(model, X, y, scaler, split_name):
     y_pred = (y_pred_proba > 0.5).astype(int)
 
     metrics = {
-        "log_loss": log_loss(y, y_pred_proba),
+        "log_loss": log_loss(y, y_pred_proba, labels=[0, 1]),
         "brier_score": brier_score_loss(y, y_pred_proba),
         "accuracy": accuracy_score(y, y_pred),
         "n_samples": len(y),
@@ -370,6 +376,65 @@ def log_segment_metrics(df: pd.DataFrame, proba_col: str = "pred_proba") -> None
             acc = (g["home_win"] == (g[proba_col] > 0.5).astype(int)).mean()
             ll = log_loss(g["home_win"], g[proba_col], labels=[0, 1])
             logger.info(f"  {level}: n={n}, acc={acc:.3f}, logloss={ll:.3f}")
+
+
+def _elo_expected_prob(
+    home_elo: float,
+    away_elo: float,
+    home_advantage: float = 100.0,
+) -> float:
+    """Elo expected score for home team with home-court advantage."""
+    home_adj = home_elo + home_advantage
+    return float(1.0 / (1.0 + 10 ** ((away_elo - home_adj) / 400.0)))
+
+
+def _logit(p: np.ndarray) -> np.ndarray:
+    eps = 1e-15
+    p = np.clip(p, eps, 1 - eps)
+    return np.log(p / (1 - p))
+
+
+def _inv_logit(z: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-z))
+
+
+def _baseline_metrics(y_true: np.ndarray, proba: np.ndarray) -> dict:
+    y_true = np.asarray(y_true).astype(int)
+    proba = np.asarray(proba).astype(float)
+    pred = (proba > 0.5).astype(int)
+    return {
+        "log_loss": float(log_loss(y_true, proba, labels=[0, 1])),
+        "brier_score": float(brier_score_loss(y_true, proba)),
+        "accuracy": float(accuracy_score(y_true, pred)),
+        "n_samples": int(len(y_true)),
+    }
+
+
+def _fit_market_blend_weight(
+    y_val: np.ndarray,
+    model_proba_val: np.ndarray,
+    market_proba_val: np.ndarray,
+    w_grid: np.ndarray | None = None,
+) -> float:
+    """Fit a logit-space blend weight between model and market on validation."""
+    if w_grid is None:
+        w_grid = np.linspace(0.0, 1.0, 21)
+
+    y_val = np.asarray(y_val).astype(int)
+    model_proba_val = np.asarray(model_proba_val).astype(float)
+    market_proba_val = np.asarray(market_proba_val).astype(float)
+
+    best_w = 1.0
+    best_loss = float("inf")
+    m_logit = _logit(model_proba_val)
+    k_logit = _logit(market_proba_val)
+    for w in w_grid:
+        blended = _inv_logit(w * m_logit + (1.0 - w) * k_logit)
+        loss = float(log_loss(y_val, blended, labels=[0, 1]))
+        if loss < best_loss:
+            best_loss = loss
+            best_w = float(w)
+    return best_w
 
 
 def stratified_split(features_df, train_ratio=0.6, val_ratio=0.2, random_state=42):
@@ -438,7 +503,9 @@ def l1_feature_select(
         )
         model.fit(X_train_scaled, y_train)
         val_pred = model.predict_proba(X_val_scaled)[:, 1]
-        loss = log_loss(y_val, val_pred)
+        if pd.Series(y_val).nunique() < 2:
+            continue
+        loss = log_loss(y_val, val_pred, labels=[0, 1])
         if loss < best_loss:
             best_loss = loss
             best_mask = (np.abs(model.coef_) > 1e-4).flatten()
@@ -461,90 +528,353 @@ def save_model(
     train_metrics,
     val_metrics,
     test_metrics,
+    train_pred_proba: np.ndarray,
+    val_pred_proba: np.ndarray,
+    test_pred_proba: np.ndarray,
     output_dir,
     selected_features: list[str] | None = None,
     pruned_features: list[str] | None = None,
+    best_c: float | None = None,
+    train_df: pd.DataFrame | None = None,
+    val_df: pd.DataFrame | None = None,
+    test_df: pd.DataFrame | None = None,
 ):
-    """Save model and metadata."""
+    """Save model and metadata with MLflow experiment tracking."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    model_path = output_dir / "nba_model_v1.0.0.pkl"
-    with open(model_path, "wb") as f:
-        pickle.dump({"model": model, "scaler": scaler}, f)
-    logger.info(
-        f"Saved model to {model_path} ({model_path.stat().st_size / 1024:.1f} KB)"
-    )
+    metrics_dir = output_dir / "metrics"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
 
-    metadata = {
-        "version": "v1.0.0_20260110",
-        "created_at": datetime.now().isoformat(),
-        "model_type": "LogisticRegression",
-        "training_data": "2019-2024 (excluding 2020-2021 COVID bubble)",
-        "features_all": [
-            "home_elo",
-            "away_elo",
-            "elo_diff",
-            "is_home",
-            "home_win_rate_L10",
-            "away_win_rate_L10",
-            "home_pt_diff_L10",
-            "away_pt_diff_L10",
-            "home_rest_days",
-            "away_rest_days",
-            "home_b2b",
-            "away_b2b",
-            "h2h_home_wins",
-            "home_streak",
-            "away_streak",
-            "home_lineup_cont_overlap",
-            "away_lineup_cont_overlap",
-            "home_key_out_count",
-            "away_key_out_count",
-            "home_injured_count",
-            "away_injured_count",
-            "home_injured_minutes_lost",
-            "away_injured_minutes_lost",
-            "home_weighted_PER",
-            "away_weighted_PER",
-            "home_weighted_BPM",
-            "away_weighted_BPM",
-            "home_weighted_WS48",
-            "away_weighted_WS48",
-            "per_diff",
-            "bpm_diff",
-            "ws48_diff",
-            "home_net_rating",
-            "away_net_rating",
-            "net_rating_diff",
-            "home_pace",
-            "away_pace",
-            "pace_diff",
-            "home_off_3pa_rate",
-            "away_off_3pa_rate",
-            "off_3pa_rate_diff",
-            "home_def_opp_3pa_rate",
-            "away_def_opp_3pa_rate",
-            "def_opp_3pa_rate_diff",
-            "implied_home_prob",
-            "spread_home",
-            "total",
-        ],
-        "features_pruned_corr": pruned_features or [],
-        "features_selected": selected_features or [],
-        "train_metrics": train_metrics,
-        "val_metrics": val_metrics,
-        "test_metrics": test_metrics,
-        "hyperparameters": {
-            "C": float(model.C),
-            "max_iter": model.max_iter,
-            "solver": model.solver,
-        },
-    }
-    metadata_path = output_dir / "nba_model_v1.0.0_metadata.json"
-    with open(metadata_path, "w") as f:
-        json.dump(metadata, f, indent=2)
-    logger.info(f"Saved metadata to {metadata_path}\n")
+    # Start MLflow run
+    mlflow.set_experiment("nba_win_prediction")
+
+    with mlflow.start_run(run_name=f"train_{datetime.now().strftime('%Y%m%d_%H%M%S')}"):
+        # Log hyperparameters
+        mlflow.log_param("model_type", "LogisticRegression")
+        mlflow.log_param("C", float(model.C) if best_c is None else best_c)
+        mlflow.log_param("max_iter", model.max_iter)
+        mlflow.log_param("solver", model.solver)
+        mlflow.log_param(
+            "n_features_selected", len(selected_features) if selected_features else 0
+        )
+        mlflow.log_param(
+            "n_features_pruned", len(pruned_features) if pruned_features else 0
+        )
+
+        # Log dataset sizes
+        if train_df is not None:
+            mlflow.log_param("train_size", len(train_df))
+        if val_df is not None:
+            mlflow.log_param("val_size", len(val_df))
+        if test_df is not None:
+            mlflow.log_param("test_size", len(test_df))
+
+        # Log training data window
+        mlflow.log_param("training_data", "2019-2024 (excluding 2020-2021 COVID)")
+        mlflow.log_param(
+            "data_min_date",
+            train_df["date"].min().isoformat() if train_df is not None else "N/A",
+        )
+        mlflow.log_param(
+            "data_max_date",
+            train_df["date"].max().isoformat() if train_df is not None else "N/A",
+        )
+
+        # Log metrics for all splits
+        for split_name, metrics in [
+            ("train", train_metrics),
+            ("val", val_metrics),
+            ("test", test_metrics),
+        ]:
+            mlflow.log_metric(f"{split_name}_log_loss", metrics["log_loss"])
+            mlflow.log_metric(f"{split_name}_brier_score", metrics["brier_score"])
+            mlflow.log_metric(f"{split_name}_accuracy", metrics["accuracy"])
+
+        # Calibration artifacts (required by future-work.md)
+        calibration_summary: dict[str, dict] = {}
+        for split_name, split_df, split_proba in [
+            ("train", train_df, train_pred_proba),
+            ("val", val_df, val_pred_proba),
+            ("test", test_df, test_pred_proba),
+        ]:
+            if split_df is None:
+                continue
+            y_split = split_df["home_win"].astype(int).to_numpy()
+            proba = np.asarray(split_proba).astype(float)
+
+            ece, mce = ll_calibration_errors(
+                proba.tolist(), y_split.tolist(), n_buckets=10
+            )
+            mlflow.log_metric(f"{split_name}_ece", ece)
+            mlflow.log_metric(f"{split_name}_mce", mce)
+
+            table = ll_calibration_table(proba.tolist(), y_split.tolist(), n_buckets=10)
+            table_path = metrics_dir / f"reliability_{split_name}.json"
+            with open(table_path, "w") as f:
+                json.dump(table, f, indent=2)
+            mlflow.log_artifact(str(table_path), "metrics")
+
+            calibration_summary[split_name] = {
+                "ece": float(ece),
+                "mce": float(mce),
+                "reliability_buckets_artifact": str(table_path.name),
+            }
+
+        # Benchmarks (required by future-work.md)
+        baseline_summary: dict[str, dict] = {}
+        if train_df is not None and test_df is not None:
+            train_home_rate = float(train_df["home_win"].mean())
+            y_test = test_df["home_win"].astype(int).to_numpy()
+            p_const = np.full_like(y_test, fill_value=train_home_rate, dtype=float)
+            baseline_summary["constant_home_rate"] = {
+                "train_home_rate": train_home_rate,
+                "test": _baseline_metrics(y_test, p_const),
+            }
+            mlflow.log_metric(
+                "baseline_constant_test_log_loss",
+                baseline_summary["constant_home_rate"]["test"]["log_loss"],
+            )
+
+            p_elo = test_df.apply(
+                lambda r: _elo_expected_prob(
+                    float(r["home_elo"]), float(r["away_elo"])
+                ),
+                axis=1,
+            ).to_numpy(dtype=float)
+            baseline_summary["elo_only"] = {"test": _baseline_metrics(y_test, p_elo)}
+            mlflow.log_metric(
+                "baseline_elo_test_log_loss",
+                baseline_summary["elo_only"]["test"]["log_loss"],
+            )
+
+            # Market baselines only on rows with market data
+            if "implied_home_prob" in test_df.columns:
+                market_mask_test = test_df["implied_home_prob"].astype(float) > 0
+                if market_mask_test.any():
+                    y_mkt = y_test[market_mask_test.to_numpy()]
+                    p_mkt = (
+                        test_df.loc[market_mask_test, "implied_home_prob"]
+                        .astype(float)
+                        .to_numpy()
+                    )
+                    baseline_summary["market_only"] = {
+                        "test": _baseline_metrics(y_mkt, p_mkt)
+                    }
+                    mlflow.log_metric(
+                        "baseline_market_test_log_loss",
+                        baseline_summary["market_only"]["test"]["log_loss"],
+                    )
+
+                    # Market-as-prior blend (fit on validation subset with market)
+                    if val_df is not None and "implied_home_prob" in val_df.columns:
+                        market_mask_val = val_df["implied_home_prob"].astype(float) > 0
+                        if market_mask_val.any():
+                            y_val = (
+                                val_df.loc[market_mask_val, "home_win"]
+                                .astype(int)
+                                .to_numpy()
+                            )
+                            p_model_val = np.asarray(val_pred_proba, dtype=float)[
+                                market_mask_val.to_numpy()
+                            ]
+                            p_market_val = (
+                                val_df.loc[market_mask_val, "implied_home_prob"]
+                                .astype(float)
+                                .to_numpy()
+                            )
+                            best_w = _fit_market_blend_weight(
+                                y_val=y_val,
+                                model_proba_val=p_model_val,
+                                market_proba_val=p_market_val,
+                            )
+
+                            p_model_test = np.asarray(test_pred_proba, dtype=float)[
+                                market_mask_test.to_numpy()
+                            ]
+                            p_blend = _inv_logit(
+                                best_w * _logit(p_model_test)
+                                + (1.0 - best_w) * _logit(p_mkt)
+                            )
+                            baseline_summary["market_prior_blend"] = {
+                                "best_weight_model_logit": float(best_w),
+                                "test": _baseline_metrics(y_mkt, p_blend),
+                            }
+                            mlflow.log_metric(
+                                "baseline_market_blend_test_log_loss",
+                                baseline_summary["market_prior_blend"]["test"][
+                                    "log_loss"
+                                ],
+                            )
+
+        # Segment summary artifact (test split)
+        segment_summary: dict[str, dict] = {}
+        if test_df is not None:
+            seg_df = test_df.copy()
+            seg_df["pred_proba"] = np.asarray(test_pred_proba, dtype=float)
+            seg_df["rest_bucket"] = seg_df["home_rest_days"].apply(_bucket_rest)
+            if "implied_home_prob" in seg_df.columns:
+                seg_df["market_favorite"] = np.where(
+                    seg_df["implied_home_prob"].astype(float) > 0,
+                    np.where(
+                        seg_df["implied_home_prob"].astype(float) >= 0.5, "fav", "dog"
+                    ),
+                    "unknown",
+                )
+            seg_df["month"] = seg_df["date"].dt.month
+
+            def _season_phase(month: int) -> str:
+                # Simple NBA-season-ish buckets (calendar-based; good enough for POC)
+                if month in (10, 11):
+                    return "early"
+                if month in (12, 1):
+                    return "mid"
+                if month in (2, 3, 4):
+                    return "late"
+                return "other"
+
+            seg_df["season_phase"] = seg_df["month"].astype(int).apply(_season_phase)
+
+            def summarize(group: pd.DataFrame) -> dict:
+                y = group["home_win"].astype(int).to_numpy()
+                p = group["pred_proba"].astype(float).to_numpy()
+                return _baseline_metrics(y, p)
+
+            for key in ["season", "rest_bucket", "market_favorite", "season_phase"]:
+                if key not in seg_df.columns:
+                    continue
+                out: dict[str, dict] = {}
+                for level, g in seg_df.groupby(key):
+                    if len(g) < 30:
+                        continue
+                    out[str(level)] = summarize(g)
+                if out:
+                    segment_summary[key] = out
+
+            segment_path = metrics_dir / "segment_summary_test.json"
+            with open(segment_path, "w") as f:
+                json.dump(segment_summary, f, indent=2)
+            mlflow.log_artifact(str(segment_path), "metrics")
+
+        evaluation_summary = {
+            "splits": {
+                "train": train_metrics,
+                "val": val_metrics,
+                "test": test_metrics,
+            },
+            "calibration": calibration_summary,
+            "baselines": baseline_summary,
+            "segments_test": segment_summary,
+        }
+        evaluation_path = metrics_dir / "evaluation_summary.json"
+        with open(evaluation_path, "w") as f:
+            json.dump(evaluation_summary, f, indent=2)
+        mlflow.log_artifact(str(evaluation_path), "metrics")
+
+        # Save model locally first
+        model_path = output_dir / "nba_model_v1.0.0.pkl"
+        with open(model_path, "wb") as f:
+            pickle.dump({"model": model, "scaler": scaler}, f)
+        logger.info(
+            f"Saved model to {model_path} ({model_path.stat().st_size / 1024:.1f} KB)"
+        )
+
+        # Log model to MLflow
+        mlflow.sklearn.log_model(
+            model,
+            "model",
+            registered_model_name="nba_win_predictor",
+        )
+
+        # Log model artifact
+        mlflow.log_artifact(str(model_path), "model_artifacts")
+
+        metadata = {
+            "version": "v1.0.0_20260110",
+            "created_at": datetime.now().isoformat(),
+            "model_type": "LogisticRegression",
+            "training_data": "2019-2024 (excluding 2020-2021 COVID bubble)",
+            "features_all": [
+                "home_elo",
+                "away_elo",
+                "elo_diff",
+                "is_home",
+                "home_win_rate_L10",
+                "away_win_rate_L10",
+                "home_pt_diff_L10",
+                "away_pt_diff_L10",
+                "home_rest_days",
+                "away_rest_days",
+                "home_b2b",
+                "away_b2b",
+                "h2h_home_wins",
+                "home_streak",
+                "away_streak",
+                "home_lineup_cont_overlap",
+                "away_lineup_cont_overlap",
+                "home_key_out_count",
+                "away_key_out_count",
+                "home_injured_count",
+                "away_injured_count",
+                "home_injured_minutes_lost",
+                "away_injured_minutes_lost",
+                "home_weighted_PER",
+                "away_weighted_PER",
+                "home_weighted_BPM",
+                "away_weighted_BPM",
+                "home_weighted_WS48",
+                "away_weighted_WS48",
+                "per_diff",
+                "bpm_diff",
+                "ws48_diff",
+                "home_net_rating",
+                "away_net_rating",
+                "net_rating_diff",
+                "home_pace",
+                "away_pace",
+                "pace_diff",
+                "home_off_3pa_rate",
+                "away_off_3pa_rate",
+                "off_3pa_rate_diff",
+                "home_def_opp_3pa_rate",
+                "away_def_opp_3pa_rate",
+                "def_opp_3pa_rate_diff",
+                "implied_home_prob",
+                "spread_home",
+                "total",
+            ],
+            "features_pruned_corr": pruned_features or [],
+            "features_selected": selected_features or [],
+            "train_metrics": train_metrics,
+            "val_metrics": val_metrics,
+            "test_metrics": test_metrics,
+            "calibration": calibration_summary,
+            "baselines": baseline_summary,
+            "hyperparameters": {
+                "C": float(model.C),
+                "max_iter": model.max_iter,
+                "solver": model.solver,
+            },
+        }
+        metadata_path = output_dir / "nba_model_v1.0.0_metadata.json"
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+        logger.info(f"Saved metadata to {metadata_path}")
+
+        # Log metadata as artifact
+        mlflow.log_artifact(str(metadata_path), "model_artifacts")
+
+        # Log feature lists as artifacts
+        if selected_features:
+            features_path = output_dir / "selected_features.json"
+            with open(features_path, "w") as f:
+                json.dump(selected_features, f, indent=2)
+            mlflow.log_artifact(str(features_path), "features")
+
+        logger.info(f"✓ MLflow run logged: {mlflow.active_run().info.run_id}")
+        logger.info(
+            f"✓ View at: http://localhost:5000/#/experiments/{mlflow.active_run().info.experiment_id}\n"
+        )
 
 
 def print_results(
@@ -864,7 +1194,10 @@ def main():
         model.fit(X_train_scaled, y_train)
 
         y_val_pred_proba = model.predict_proba(X_val_scaled)[:, 1]
-        val_loss = log_loss(y_val, y_val_pred_proba)
+        if pd.Series(y_val).nunique() < 2:
+            val_loss = float("inf")
+        else:
+            val_loss = log_loss(y_val, y_val_pred_proba, labels=[0, 1])
 
         status = "🏆 BEST" if val_loss < best_val_loss else "      "
         logger.info(f"  {status} | C={c:6.3f} → Val Loss: {val_loss:.4f}")
@@ -899,9 +1232,16 @@ def main():
         train_metrics,
         val_metrics,
         test_metrics,
+        train_proba,
+        val_proba,
+        test_proba,
         args.output_dir,
         selected_features=selected_feature_cols,
         pruned_features=pruned_feature_cols,
+        best_c=best_c,
+        train_df=train_df,
+        val_df=val_df,
+        test_df=test_df,
     )
 
     # Print results

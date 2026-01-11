@@ -230,6 +230,69 @@ def calibration_buckets(
     return buckets
 
 
+def calibration_errors(
+    predictions: list[float],
+    outcomes: list[int],
+    n_buckets: int = 10,
+) -> tuple[float, float]:
+    """Compute Expected Calibration Error (ECE) and Max Calibration Error (MCE).
+
+    ECE is a weighted average of absolute calibration gaps across buckets:
+        ECE = sum_k (n_k / N) * |acc_k - conf_k|
+
+    MCE is the maximum absolute calibration gap across buckets:
+        MCE = max_k |acc_k - conf_k|
+
+    Where:
+      - conf_k = avg predicted probability in bucket k
+      - acc_k = empirical win rate in bucket k
+
+    Args:
+        predictions: List of predicted probabilities in [0, 1]
+        outcomes: List of outcomes in {0, 1}
+        n_buckets: Number of uniform buckets across [0, 1]
+
+    Returns:
+        (ece, mce)
+
+    Notes:
+        - Returns (0.0, 0.0) for empty inputs.
+        - Uses uniform bucket edges to match `calibration_buckets`.
+    """
+    buckets = calibration_buckets(predictions, outcomes, n_buckets=n_buckets)
+    total = sum(b.total for b in buckets)
+    if total == 0:
+        return 0.0, 0.0
+
+    gaps = [abs(b.empirical_win_rate - b.avg_predicted) for b in buckets]
+    ece = sum((b.total / total) * gap for b, gap in zip(buckets, gaps, strict=True))
+    mce = max(gaps) if gaps else 0.0
+    return float(ece), float(mce)
+
+
+def calibration_table(
+    predictions: list[float],
+    outcomes: list[int],
+    n_buckets: int = 10,
+) -> list[dict]:
+    """Return a JSON-serializable calibration table derived from buckets."""
+    buckets = calibration_buckets(predictions, outcomes, n_buckets=n_buckets)
+    rows: list[dict] = []
+    for b in buckets:
+        rows.append(
+            {
+                "min_prob": float(b.min_prob),
+                "max_prob": float(b.max_prob),
+                "avg_predicted": float(b.avg_predicted),
+                "wins": int(b.wins),
+                "total": int(b.total),
+                "empirical_win_rate": float(b.empirical_win_rate),
+                "abs_gap": float(abs(b.empirical_win_rate - b.avg_predicted)),
+            }
+        )
+    return rows
+
+
 def clv(open_line_prob: float, close_line_prob: float, bet_side: str) -> float:
     """
     Calculate Closing Line Value (CLV).

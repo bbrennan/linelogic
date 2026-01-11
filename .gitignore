@@ -82,7 +82,8 @@ data/raw/
 data/processed/
 models/checkpoints/
 experiments/
-.linelogic/
+mlruns/
+.linelogic/*
 !.linelogic/linelogic.db
 !.linelogic/*.pkl
 !.linelogic/*_metadata.json

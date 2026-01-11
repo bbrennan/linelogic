@@ -32,7 +32,6 @@ jobs:
 
             - name: Run POC validation and email report
               env:
-                  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
@@ -53,7 +52,6 @@ jobs:
 
             - name: Legacy - Run weekly-summary (if exists)
               env:
-                  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}

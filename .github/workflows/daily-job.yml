@@ -39,7 +39,6 @@ jobs:
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-                  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
@@ -50,7 +49,6 @@ jobs:
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-                  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}

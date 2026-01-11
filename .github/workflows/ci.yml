@@ -9,8 +9,8 @@ on:
 jobs:
     validate-ingest:
         runs-on: ubuntu-latest
-    env:
-      BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+        env:
+            BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4

@@ -7,6 +7,21 @@ on:
         branches: [develop]
 
 jobs:
+    repo-guardrails:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+
+            - name: Enforce no root Markdown files
+              run: |
+                  python scripts/check_root_markdown.py
+
     validate-ingest:
         runs-on: ubuntu-latest
         env:

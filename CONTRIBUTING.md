@@ -88,6 +88,10 @@ refactor: simplify cache key generation
 
 ### Documentation
 
+- Keep docs out of the repo root (prevents a "file swamp").
+- Put long-form docs under `docs/` (see `docs/README.md`).
+- Root-level Markdown is intentionally limited to `README.md`, `CONTRIBUTING.md`, and `SECURITY.md`.
+
 - Update relevant docs in `docs/` folder
 - Add docstrings to all public APIs
 - Update README.md if needed

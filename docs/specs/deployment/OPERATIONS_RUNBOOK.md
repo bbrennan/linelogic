@@ -256,7 +256,7 @@ python scripts/infer_daily.py --date 2026-01-11 --verbose
 
 ### Prediction Tracking Template
 
-Create file: `predictions_log.csv`
+Create file: `docs/status/predictions_log.csv`
 
 ```csv
 date,home_team,away_team,pred_prob,confidence_tier,actual_home_win,tracked_yn,notes
@@ -280,7 +280,7 @@ date,home_team,away_team,pred_prob,confidence_tier,actual_home_win,tracked_yn,no
 # Generate accuracy by tier
 python -c "
 import pandas as pd
-df = pd.read_csv('predictions_log.csv')
+df = pd.read_csv('docs/status/predictions_log.csv')
 df['pred_correct'] = ((df['pred_prob'] >= 0.5) & (df['actual_home_win'])) | ((df['pred_prob'] < 0.5) & (~df['actual_home_win']))
 print('\n=== ACCURACY BY TIER ===')
 for tier in ['TIER 1', 'TIER 2', 'TIER 3', 'TIER 4']:
@@ -317,7 +317,7 @@ Track and report these metrics:
 ### Contacts
 
 **Model Development:**
-- See [TRAIN_QUICK_START.md](TRAIN_QUICK_START.md) for retraining guide
+- See [TRAIN_QUICK_START.md](../training/TRAIN_QUICK_START.md) for retraining guide
 - See [src/linelogic/](src/linelogic/) for feature engineering code
 
 **Data Issues:**
@@ -327,7 +327,7 @@ Track and report these metrics:
 
 **Deployment Questions:**
 - See [DEPLOYMENT_READY.md](DEPLOYMENT_READY.md) for overview
-- See [ENHANCED_MODEL_SUMMARY.md](ENHANCED_MODEL_SUMMARY.md) for technical details
+- See [ENHANCED_MODEL_SUMMARY.md](../model/ENHANCED_MODEL_SUMMARY.md) for technical details
 
 ---
 

@@ -708,16 +708,16 @@ After implementing redesign:
 
 ## 🚀 Quick Start: Apply Enhanced Design Now
 
-**File Created:** `streamlit_app_enhanced.py`
+**File Created:** `app/app_enhanced.py`
 
 **To deploy:**
 ```bash
 # Test locally
-streamlit run streamlit_app_enhanced.py
+streamlit run app/app_enhanced.py
 
 # If satisfied, replace current app
-cp streamlit_app_enhanced.py streamlit_app.py
-git add streamlit_app.py
+cp app/app_enhanced.py app/app.py
+git add app/app.py
 git commit -m "UI/UX redesign: Professional dark theme, improved hierarchy, enhanced metrics"
 git push
 
@@ -749,7 +749,7 @@ Your current dashboard is **functional but forgettable**. LineLogic deserves a U
 Your UI should make users feel like they're using a **Bloomberg Terminal for sports betting**, not a Streamlit template.
 
 **Next steps:**
-1. Deploy `streamlit_app_enhanced.py` (2 hours)
+1. Deploy `app/app_enhanced.py` (2 hours)
 2. Commission professional logo ($300-500, 1-2 weeks)
 3. Add missing features (calibration, risk, explainability) (8 hours)
 4. Iterate based on user feedback

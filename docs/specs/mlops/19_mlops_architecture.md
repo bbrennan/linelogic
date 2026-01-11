@@ -338,4 +338,4 @@ LineLogic/
 - [Feast Documentation](https://docs.feast.dev/)
 - [Evidently AI Documentation](https://docs.evidentlyai.com/)
 - [Data Contracts (Pydantic)](https://docs.pydantic.dev/)
-- [Architecture Decision Records](../adr/)
+- [Architecture Decision Records](../../decisions/)

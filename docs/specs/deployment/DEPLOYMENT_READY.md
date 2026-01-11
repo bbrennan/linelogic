@@ -194,10 +194,10 @@ After L1 selection, the model uses 13 features:
 scripts/
 ├── train_offline.py                   # Training pipeline (reuse monthly)
 ├── analyze_segmentation.py            # Trustworthiness analysis
-└── infer_daily.py                     # [TODO: create daily inference script]
+└── infer_daily.py                     # Daily inference (generates predictions)
 
 DEPLOYMENT_READY.md                    # This file
-ENHANCED_MODEL_SUMMARY.md              # Detailed model documentation
+docs/specs/model/ENHANCED_MODEL_SUMMARY.md  # Detailed model documentation
 ```
 
 ---
@@ -267,14 +267,14 @@ Track these KPIs over first 30 days:
 ## Support & Questions
 
 **Model Retraining Questions:**
-- See [TRAIN_QUICK_START.md](TRAIN_QUICK_START.md)
+- See [TRAIN_QUICK_START.md](../training/TRAIN_QUICK_START.md)
 - Key: Run `train_offline.py` monthly with latest BALLDONTLIE data
 
 **Feature Engineering Questions:**
-- See [src/linelogic/features/engineer.py](src/linelogic/features/engineer.py)
+- See [src/linelogic/features/engineer.py](../../../src/linelogic/features/engineer.py)
 
 **Data & Caching Questions:**
-- See [src/linelogic/data/](src/linelogic/data/)
+- See [src/linelogic/data/](../../../src/linelogic/data/)
 
 ---
 

@@ -586,4 +586,4 @@ RECOMMENDATIONS
 
 ---
 
-**Next**: [Risks and Compliance](06_risks_and_compliance.md) | [Architecture](../adr/0001_architecture.md)
+**Next**: [Risks and Compliance](../compliance/06_risks_and_compliance.md) | [Architecture](../../decisions/0001_architecture.md)

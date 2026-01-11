@@ -91,7 +91,7 @@
 - Gmail SMTP configured via GitHub Secrets
 - Secrets: SMTP_USER, SMTP_PASS, FROM_EMAIL, BALLDONTLIE_API_KEY
 - HTML templates prepared
-- Recipient: bbrennan83@gmail.com
+- Recipient: your.email@example.com
 
 ### ✅ DATA PIPELINE: WORKING
 - BALLDONTLIE API: Connected ✓
@@ -113,7 +113,7 @@
 5. Model scores all games
 6. Confidence tiers auto-assigned (TIER 1-4)
 7. HTML email generated with predictions table
-8. Email sent to bbrennan83@gmail.com
+8. Email sent to your.email@example.com
 9. CSV predictions committed to GitHub repo
 10. **Zero manual intervention**
 

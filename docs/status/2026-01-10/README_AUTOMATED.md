@@ -38,7 +38,7 @@ GitHub Actions Workflow: "LineLogic Daily Job"
 6. Done! (No human intervention)
 ```
 
-**Email arrives automatically at:** bbrennan83@gmail.com
+**Email arrives automatically at:** your.email@example.com
 
 ---
 
@@ -63,7 +63,7 @@ GitHub Actions Workflow: "LineLogic Weekly Summary"
 6. Done! (No human intervention)
 ```
 
-**Email arrives automatically at:** bbrennan83@gmail.com
+**Email arrives automatically at:** your.email@example.com
 
 ---
 
@@ -122,7 +122,7 @@ GitHub Actions Workflow: "LineLogic Weekly Summary"
 
 ```
 FROM: GitHub Actions Bot
-TO: bbrennan83@gmail.com
+TO: your.email@example.com
 SUBJECT: LineLogic Daily Predictions - 2026-01-11
 
 ╔═══════════════════════════════════════════════════════╗
@@ -146,7 +146,7 @@ PHI  | WAS  | 55%    | 2d   | TIER 1 🟢   | USE MODEL
 
 ```
 FROM: GitHub Actions Bot
-TO: bbrennan83@gmail.com
+TO: your.email@example.com
 SUBJECT: LineLogic Weekly Validation Report - Week Ending 2026-01-17
 
 ╔═══════════════════════════════════════════════════════╗
@@ -281,7 +281,7 @@ gh secret list --repo YOUR_OWNER/YOUR_REPO | grep -E "SMTP|BALLDONTLIE"
 |-----------|--------|-------|
 | Daily Inference | ✅ Ready | Runs automatically 9 AM UTC |
 | Weekly Validation | ✅ Ready | Runs automatically Mondays 9 AM UTC |
-| Email Notifications | ✅ Ready | Sends to bbrennan83@gmail.com |
+| Email Notifications | ✅ Ready | Sends to your.email@example.com |
 | GitHub Integration | ✅ Ready | Auto-commits results to repo |
 | Documentation | ✅ Complete | 8 comprehensive guides |
 | Model & Data | ✅ Ready | All artifacts in place |

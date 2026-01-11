@@ -29,4 +29,4 @@ We follow a GitFlow-lite process designed for fast iteration with clear stabilit
 ## Tips
 - Small PRs (under ~300 lines) are easier to review.
 - Keep commits logically grouped.
-- Document non-obvious decisions in `adr/` as needed.
+- Document non-obvious decisions in `docs/decisions/` (ADRs) as needed.

@@ -87,7 +87,7 @@ ls -la scripts/infer_daily.py scripts/validate_predictions.py
 ls -la .linelogic/nba_model_v1.0.0.pkl
 ls -la .linelogic/nba_model_v1.0.0_metadata.json
 ls -la .linelogic/games_cache.csv
-ls -la predictions_log.csv
+ls -la docs/status/predictions_log.csv
 ```
 
 **Expected:**
@@ -135,7 +135,7 @@ gh workflow run weekly-summary.yml --repo YOUR_OWNER/YOUR_REPO
 ```
 
 **Expected within 1-2 minutes:**
-- ✅ Email arrives at bbrennan83@gmail.com
+- ✅ Email arrives at your.email@example.com
 - ✅ Email has HTML table with predictions/validation
 - ✅ GitHub Actions shows "Success" status
 
@@ -180,16 +180,11 @@ cron: "0 9 * * 1"  # Mondays 9 AM UTC
 
 **Want to change recipient email?**
 
-Edit `.github/workflows/daily-job.yml` and `.github/workflows/weekly-summary.yml`:
+Set the `TO_EMAIL` repository secret in GitHub:
 
-```yaml
-# Change this line in both workflows:
-msg['To'] = 'bbrennan83@gmail.com'
-# To:
-msg['To'] = 'your-email@example.com'
-```
-
-Then commit and push.
+- GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+- Name: `TO_EMAIL`
+- Value: `your.email@example.com`
 
 ---
 
@@ -208,7 +203,7 @@ Then commit and push.
 - Check Actions tab to see if it's scheduled
 
 ### Issue: "FileNotFoundError: predictions_log.csv"
-**Solution:** File was created; may not be committed yet. First run will create it automatically.
+**Solution:** The canonical location is `docs/status/predictions_log.csv`. Ensure it exists and is committed.
 
 ---
 
@@ -245,7 +240,7 @@ Then commit and push.
 ```
 Generate predictions with confidence tiers
     ↓
-Send HTML email to bbrennan83@gmail.com
+Send HTML email to your.email@example.com
     ↓
 Commit CSV to GitHub repo
     ↓

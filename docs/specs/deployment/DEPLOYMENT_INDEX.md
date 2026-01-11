@@ -25,11 +25,11 @@ LineLogic/
 │   ├── scripts/validate_predictions.py    - Validation analysis (weekly reports)
 │   │
 ├── 📊 DATA FILES
-│   ├── predictions_log.csv                - Main tracking log (append daily results)
+│   ├── docs/status/predictions_log.csv    - Main tracking log (append daily results)
 │   │
 ├── 📚 REFERENCE
-│   ├── ENHANCED_MODEL_SUMMARY.md          - Technical model details
-│   ├── TRAIN_QUICK_START.md               - Retraining procedures (monthly)
+│   ├── docs/specs/model/ENHANCED_MODEL_SUMMARY.md    - Technical model details
+│   ├── docs/specs/training/TRAIN_QUICK_START.md      - Retraining procedures (monthly)
 │   ├── README.md                          - Project overview
 │   │
 └── 🔧 MODEL ARTIFACTS
@@ -85,7 +85,7 @@ LineLogic/
   - Feature importance
   - Success metrics
 
-- [ENHANCED_MODEL_SUMMARY.md](ENHANCED_MODEL_SUMMARY.md)
+- [ENHANCED_MODEL_SUMMARY.md](../model/ENHANCED_MODEL_SUMMARY.md)
   - Detailed technical specifications
   - Feature engineering
   - Known limitations
@@ -96,13 +96,13 @@ LineLogic/
 ## 🚀 The 3 Key Components
 
 ### **1. Daily Inference Script** ✅
-**File:** [scripts/infer_daily.py](scripts/infer_daily.py)
+**File:** [scripts/infer_daily.py](../../../scripts/infer_daily.py)
 
 **What:** Generates predictions for today's NBA games
 
 **How to Run:**
 ```bash
-python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).csv
+python scripts/infer_daily.py --verbose --output docs/status/daily/predictions_$(date +%Y-%m-%d).csv
 ```
 
 **Output:** CSV with predictions + confidence tiers
@@ -129,7 +129,7 @@ python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).c
 ---
 
 ### **3. A/B Testing Framework** ✅
-**Files:** [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) + [scripts/validate_predictions.py](scripts/validate_predictions.py)
+**Files:** [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) + [scripts/validate_predictions.py](../../../scripts/validate_predictions.py)
 
 **What:** Track predictions vs actual outcomes to validate confidence tiers
 
@@ -141,7 +141,7 @@ python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).c
 **How to Run:**
 ```bash
 python scripts/validate_predictions.py \
-  --predictions predictions_log.csv \
+  --predictions docs/status/predictions_log.csv \
   --by-tier --by-team --by-bucket
 ```
 
@@ -160,16 +160,16 @@ python scripts/validate_predictions.py \
 
 ### **Daily (8 AM)**
 ```bash
-python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).csv
+python scripts/infer_daily.py --verbose --output docs/status/daily/predictions_$(date +%Y-%m-%d).csv
 ```
 - Generate predictions → Review output → Note tiers
 
 ### **Evening (After 11 PM)**
-- Log actual game outcomes manually to `predictions_log.csv`
+- Log actual game outcomes manually to `docs/status/predictions_log.csv`
 
 ### **Weekly (Monday Morning)**
 ```bash
-python scripts/validate_predictions.py --predictions predictions_log.csv \
+python scripts/validate_predictions.py --predictions docs/status/predictions_log.csv \
   --by-tier --by-team --by-bucket
 ```
 - Run validation → Check TIER 1 accuracy ≥70% → Email report
@@ -235,10 +235,10 @@ Pred <45% → AWAY FAVORED (use model)
 | [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) | Complete operational guide | Operators | Daily reference |
 | [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) | A/B testing & tracking | Data analysts | Weekly + monthly |
 | [DEPLOYMENT_READY.md](DEPLOYMENT_READY.md) | Deployment overview | Stakeholders | Executive summary |
-| [ENHANCED_MODEL_SUMMARY.md](ENHANCED_MODEL_SUMMARY.md) | Technical specs | Data scientists | Technical reference |
-| [scripts/infer_daily.py](scripts/infer_daily.py) | Daily predictions | Automated | 8 AM every day |
-| [scripts/validate_predictions.py](scripts/validate_predictions.py) | Validation analysis | Analysts | Mondays |
-| [predictions_log.csv](predictions_log.csv) | Tracking log | Operators | Daily updates |
+| [ENHANCED_MODEL_SUMMARY.md](../model/ENHANCED_MODEL_SUMMARY.md) | Technical specs | Data scientists | Technical reference |
+| [scripts/infer_daily.py](../../../scripts/infer_daily.py) | Daily predictions | Automated | 8 AM every day |
+| [scripts/validate_predictions.py](../../../scripts/validate_predictions.py) | Validation analysis | Analysts | Mondays |
+| [docs/status/predictions_log.csv](../../status/predictions_log.csv) | Tracking log | Operators | Daily updates |
 
 ---
 
@@ -281,7 +281,7 @@ ls -la POC_DEPLOYMENT_PACKAGE.md DEPLOYMENT_CHECKLIST.md QUICK_REFERENCE.md
 - [ ] Activate `.venv`
 - [ ] Run first predictions: `python scripts/infer_daily.py --verbose ...`
 - [ ] Review output
-- [ ] Log to `predictions_log.csv`
+- [ ] Log to `docs/status/predictions_log.csv`
 - [ ] Send team notification
 
 ### **Jan 11-17 (Week 1)**

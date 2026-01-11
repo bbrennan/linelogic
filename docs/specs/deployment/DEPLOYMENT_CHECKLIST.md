@@ -33,7 +33,7 @@
 ### Verify Data & Cache
 - [ ] Games cache exists: `ls -la .linelogic/games_cache.csv`
 - [ ] Team stats exist: `ls -la .linelogic/team_season_avgs.csv`
-- [ ] Predictions log created: `ls -la predictions_log.csv`
+- [ ] Predictions log created: `ls -la docs/status/predictions_log.csv`
 
 ### Verify API Key
 - [ ] BALLDONTLIE_API_KEY is set: `echo $BALLDONTLIE_API_KEY`
@@ -79,16 +79,16 @@ date
 
 **Step 3: Generate Predictions**
 ```bash
-python scripts/infer_daily.py --verbose --output predictions_2026-01-11.csv
+python scripts/infer_daily.py --verbose --output docs/status/daily/predictions_2026-01-11.csv
 ```
 - [ ] Command runs without errors
 - [ ] Output includes predictions count
-- [ ] CSV file created: `ls -la predictions_2026-01-11.csv`
+- [ ] CSV file created: `ls -la docs/status/daily/predictions_2026-01-11.csv`
 
 **Step 4: Review Predictions**
 ```bash
 # Show prediction summary
-cat predictions_2026-01-11.csv
+cat docs/status/daily/predictions_2026-01-11.csv
 ```
 - [ ] 4-8 games shown (typical for Saturday)
 - [ ] Confidence tiers assigned (TIER 1, 2, 3, or 4)
@@ -97,11 +97,11 @@ cat predictions_2026-01-11.csv
 **Step 5: Log First Predictions**
 ```bash
 # Append to tracking log
-tail -n +2 predictions_2026-01-11.csv >> predictions_log.csv
+tail -n +2 docs/status/daily/predictions_2026-01-11.csv >> docs/status/predictions_log.csv
 # (skip header row with tail -n +2)
 ```
-- [ ] Predictions appended to `predictions_log.csv`
-- [ ] Verify: `tail -5 predictions_log.csv`
+- [ ] Predictions appended to `docs/status/predictions_log.csv`
+- [ ] Verify: `tail -5 docs/status/predictions_log.csv`
 
 **Step 6: Document in Spreadsheet/Notes**
 Create entry for today:
@@ -126,7 +126,7 @@ First predictions generated for today's games.
 Confidence tiers assigned per QUICK_REFERENCE.md.
 
 Track your predictions throughout the day.
-Merge results tomorrow morning into predictions_log.csv.
+Merge results tomorrow morning into docs/status/predictions_log.csv.
 
 Questions? See OPERATIONS_RUNBOOK.md or QUICK_REFERENCE.md
 ```
@@ -147,10 +147,10 @@ Add `actual_home_win` column to `predictions_2026-01-11.csv`:
 # Edit file manually or use Python:
 python << 'EOF'
 import pandas as pd
-df = pd.read_csv('predictions_2026-01-11.csv')
+df = pd.read_csv('docs/status/daily/predictions_2026-01-11.csv')
 # Add actual_home_win column with TRUE/FALSE values
 df['actual_home_win'] = [True, False, True, ...]  # Fill with actual results
-df.to_csv('predictions_2026-01-11.csv', index=False)
+df.to_csv('docs/status/daily/predictions_2026-01-11.csv', index=False)
 print("✓ Updated predictions with actual results")
 EOF
 ```
@@ -159,13 +159,13 @@ EOF
 
 **Step 3: Append to Log**
 ```bash
-tail -n +2 predictions_2026-01-11.csv >> predictions_log.csv
+tail -n +2 docs/status/daily/predictions_2026-01-11.csv >> docs/status/predictions_log.csv
 ```
-- [ ] Results appended to `predictions_log.csv`
+- [ ] Results appended to `docs/status/predictions_log.csv`
 
 **Step 4: Quick Review**
 ```bash
-tail -n +2 predictions_log.csv | wc -l
+tail -n +2 docs/status/predictions_log.csv | wc -l
 # Should show: 1 (if first day)
 ```
 - [ ] Results saved
@@ -178,7 +178,7 @@ tail -n +2 predictions_log.csv | wc -l
 
 **Every Morning (8 AM):**
 ```bash
-python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).csv
+python scripts/infer_daily.py --verbose --output docs/status/daily/predictions_$(date +%Y-%m-%d).csv
 ```
 - [ ] Jan 12 predictions ✓
 - [ ] Jan 13 predictions ✓
@@ -189,7 +189,7 @@ python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).c
 
 **Every Evening (After 11 PM):**
 - [ ] Log results
-- [ ] Append to `predictions_log.csv`
+- [ ] Append to `docs/status/predictions_log.csv`
 
 ---
 
@@ -199,7 +199,7 @@ python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).c
 
 ```bash
 python scripts/validate_predictions.py \
-  --predictions predictions_log.csv \
+  --predictions docs/status/predictions_log.csv \
   --by-tier --by-team --by-bucket
 ```
 - [ ] Report runs without errors
@@ -217,7 +217,7 @@ python scripts/validate_predictions.py \
 
 ### Document Findings
 
-Create entry in `validation_log.md`:
+Create entry in `docs/status/reports/validation_log.md`:
 ```
 ## Week of Jan 11-17
 
@@ -393,9 +393,9 @@ Next retraining: Mar 3
 - [ ] `QUICK_REFERENCE.md` - Quick lookup ✓
 - [ ] `DEPLOYMENT_READY.md` - Deployment overview ✓
 - [ ] `POC_DEPLOYMENT_PACKAGE.md` - Package summary ✓
-- [ ] `predictions_log.csv` - Tracking log ✓
-- [ ] `validate_predictions.py` - Validation script ✓
-- [ ] `infer_daily.py` - Inference script ✓
+- [ ] `docs/status/predictions_log.csv` - Tracking log ✓
+- [ ] `scripts/validate_predictions.py` - Validation script ✓
+- [ ] `scripts/infer_daily.py` - Inference script ✓
 
 ---
 

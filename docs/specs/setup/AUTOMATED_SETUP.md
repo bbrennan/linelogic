@@ -13,7 +13,7 @@
 1. ✅ Checkout latest code
 2. ✅ Set up Python 3.11 environment
 3. ✅ Run `scripts/infer_daily.py` → Generate predictions with confidence tiers
-4. ✅ **Email predictions to bbrennan83@gmail.com** with:
+4. ✅ **Email predictions to the configured recipient (`TO_EMAIL`)** with:
    - All games for the day
    - Prediction probabilities
    - Confidence tiers (TIER 1-4)
@@ -35,7 +35,7 @@
    - `--by-tier` (accuracy by TIER 1-4)
    - `--by-team` (accuracy by home team)
    - `--by-bucket` (calibration by prediction probability range)
-3. ✅ **Email validation report to bbrennan83@gmail.com** with:
+3. ✅ **Email validation report to the configured recipient (`TO_EMAIL`)** with:
    - Overall accuracy metrics
    - Accuracy breakdown by confidence tier
    - Status indicators (✅ on target / ⚠️ below target)
@@ -74,7 +74,7 @@ Run: python scripts/infer_daily.py --output predictions_YYYY-MM-DD.csv
     ↓
 Generate HTML email with pretty table
     ↓
-Send via Gmail SMTP to bbrennan83@gmail.com
+Send via Gmail SMTP to `TO_EMAIL` (e.g., `your.email@example.com`)
     ↓
 Commit CSV to repo
     ↓
@@ -88,11 +88,11 @@ Every Monday at 9 AM UTC
     ↓
 GitHub Actions triggers workflow
     ↓
-Run: python scripts/validate_predictions.py --predictions predictions_log.csv --by-tier --by-team --by-bucket
+Run: python scripts/validate_predictions.py --predictions docs/status/predictions_log.csv --by-tier --by-team --by-bucket
     ↓
 Generate HTML email with calibration metrics
     ↓
-Send via Gmail SMTP to bbrennan83@gmail.com
+Send via Gmail SMTP to `TO_EMAIL` (e.g., `your.email@example.com`)
     ↓
 Commit JSON + CSV reports to repo
     ↓
@@ -107,7 +107,7 @@ Done! (No manual work needed)
 
 ```
 FROM: sender@gmail.com
-TO: bbrennan83@gmail.com
+TO: your.email@example.com
 SUBJECT: LineLogic Daily Predictions - 2026-01-11
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -129,7 +129,7 @@ Decision Guide:
 
 ```
 FROM: sender@gmail.com
-TO: bbrennan83@gmail.com
+TO: your.email@example.com
 SUBJECT: LineLogic Weekly Validation Report - Week Ending 2026-01-17
 
 ┌───────────────────────────────────────────────────────────┐
@@ -204,7 +204,7 @@ But you CAN:
 If you want to manually log outcomes for validation:
 1. Check email with daily predictions
 2. After games, add `actual_home_win` column to CSV
-3. Append to `predictions_log.csv`
+3. Append to `docs/status/predictions_log.csv`
 4. Commit to repo
 
 (Workflow will read this for next Monday's validation!)
@@ -244,12 +244,12 @@ Expected output: Email with validation metrics within 1 minute
 After each run, these files are committed:
 
 **Daily:**
-- `predictions_2026-01-11.csv` (today's predictions)
-- `predictions_log.csv` (appended with results)
+- `docs/status/daily/predictions_2026-01-11.csv` (today's predictions)
+- `docs/status/predictions_log.csv` (appended with results)
 
 **Weekly (Mondays):**
-- `validation_report_2026-01-17.json` (full metrics)
-- `tier_metrics_2026-01-17.csv` (tier breakdown)
+- `docs/status/reports/validation_report_2026-01-17.json` (full metrics)
+- `docs/status/reports/tier_metrics_2026-01-17.csv` (tier breakdown)
 
 ---
 
@@ -304,7 +304,7 @@ Common times:
 
 1. ✅ GitHub Actions triggers automatically
 2. ✅ Runs `infer_daily.py` → generates predictions
-3. ✅ Sends HTML email to bbrennan83@gmail.com
+3. ✅ Sends HTML email to the configured recipient (`TO_EMAIL`)
 4. ✅ Commits CSVs to repo
 5. ✅ **Zero manual work needed**
 

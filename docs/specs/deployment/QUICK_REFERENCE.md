@@ -8,20 +8,20 @@
 
 ### **8:00 AM - Generate Predictions**
 ```bash
-python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).csv
+python scripts/infer_daily.py --verbose --output docs/status/daily/predictions_$(date +%Y-%m-%d).csv
 ```
 - ✓ Check for 4-8 games
 - ✓ Note any TIER 1 predictions (high confidence)
 - ✓ Flag TIER 4 games (back-to-back - use caution)
 
 ### **After 11 PM - Log Results**
-- Add actual outcomes to `predictions_log.csv`
+- Add actual outcomes to `docs/status/predictions_log.csv`
 - One line per game
 - Mark `actual_home_win` as TRUE/FALSE
 
 ### **Every Monday - Validation Report**
 ```bash
-python scripts/validate_predictions.py --predictions predictions_log.csv \
+python scripts/validate_predictions.py --predictions docs/status/predictions_log.csv \
   --by-tier --by-team --by-bucket
 ```
 - Check TIER 1 accuracy ≥70%
@@ -84,8 +84,8 @@ WSH (home, 1d rest) vs PHI
 |---------|----------|
 | Daily workflow confused | [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md) |
 | Validation question | [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) |
-| Retraining | [TRAIN_QUICK_START.md](TRAIN_QUICK_START.md) |
-| Model details | [ENHANCED_MODEL_SUMMARY.md](ENHANCED_MODEL_SUMMARY.md) |
+| Retraining | [TRAIN_QUICK_START.md](../training/TRAIN_QUICK_START.md) |
+| Model details | [ENHANCED_MODEL_SUMMARY.md](../model/ENHANCED_MODEL_SUMMARY.md) |
 
 ---
 
@@ -102,7 +102,7 @@ echo $BALLDONTLIE_API_KEY
 python scripts/infer_daily.py --verbose
 
 # Validate performance
-python scripts/validate_predictions.py --predictions predictions_log.csv
+python scripts/validate_predictions.py --predictions docs/status/predictions_log.csv
 ```
 
 ---

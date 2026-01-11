@@ -7,14 +7,14 @@
 ## 📦 What You Have
 
 ### 1. **Daily Inference Script** ✅
-**File:** [scripts/infer_daily.py](scripts/infer_daily.py)
+**File:** [scripts/infer_daily.py](../../../scripts/infer_daily.py)
 
 **Purpose:** Generate predictions for today's games with confidence tiers
 
 **Usage:**
 ```bash
 # Run every morning (8 AM)
-python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).csv
+python scripts/infer_daily.py --verbose --output docs/status/daily/predictions_$(date +%Y-%m-%d).csv
 ```
 
 **Output:** CSV with predictions + confidence tiers + recommendations
@@ -39,7 +39,7 @@ python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).c
 ---
 
 ### 3. **A/B Testing & Validation Framework** ✅
-**Files:** [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) + [scripts/validate_predictions.py](scripts/validate_predictions.py)
+**Files:** [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) + [scripts/validate_predictions.py](../../../scripts/validate_predictions.py)
 
 **Purpose:** Track predictions vs actual outcomes to validate model calibration
 
@@ -53,7 +53,7 @@ python scripts/infer_daily.py --output predictions_$(date +%Y-%m-%d).csv
 
 # 3. Validate weekly (every Monday)
 python scripts/validate_predictions.py \
-  --predictions predictions_log_week_01.csv \
+  --predictions docs/status/predictions_log.csv \
   --by-tier --by-team --by-bucket
 ```
 
@@ -73,7 +73,7 @@ python scripts/validate_predictions.py \
 
 **After 11 PM**
 - [ ] Record actual game outcomes
-- [ ] Add to `predictions_log.csv`
+- [ ] Add to `docs/status/predictions_log.csv`
 
 ---
 
@@ -125,8 +125,8 @@ ACCURACY BY CONFIDENCE TIER:
 
 | Task | Command |
 |------|---------|
-| Generate daily predictions | `python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).csv` |
-| Validate predictions (weekly) | `python scripts/validate_predictions.py --predictions predictions_log.csv --by-tier --by-team --by-bucket` |
+| Generate daily predictions | `python scripts/infer_daily.py --verbose --output docs/status/daily/predictions_$(date +%Y-%m-%d).csv` |
+| Validate predictions (weekly) | `python scripts/validate_predictions.py --predictions docs/status/predictions_log.csv --by-tier --by-team --by-bucket` |
 | Retrain model (monthly) | `python scripts/train_offline.py --no-synthetic --stratified` |
 | Cache-only prediction | `python scripts/train_offline.py --cache-only --stratified` |
 | Analyze segmentation | `python scripts/analyze_segmentation.py` |
@@ -163,12 +163,12 @@ scripts/
 └── analyze_segmentation.py        ← Trustworthiness analysis
 
 docs/
-├── DEPLOYMENT_READY.md            ← Deployment overview
-├── OPERATIONS_RUNBOOK.md          ← Day-to-day playbook
-├── VALIDATION_FRAMEWORK.md        ← A/B testing guide [NEW]
-└── ENHANCED_MODEL_SUMMARY.md      ← Technical details
+└── specs/deployment/
+  ├── DEPLOYMENT_READY.md            ← Deployment overview
+  ├── OPERATIONS_RUNBOOK.md          ← Day-to-day playbook
+  └── VALIDATION_FRAMEWORK.md        ← A/B testing guide
 
-predictions_log.csv               ← Weekly tracking log [NEW]
+docs/status/predictions_log.csv        ← Weekly tracking log
 ```
 
 ---
@@ -196,10 +196,10 @@ Before launching tomorrow (Jan 11):
 → See [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md)
 
 **Model Retraining?**
-→ See [TRAIN_QUICK_START.md](TRAIN_QUICK_START.md)
+→ See [TRAIN_QUICK_START.md](../training/TRAIN_QUICK_START.md)
 
 **Technical Details?**
-→ See [ENHANCED_MODEL_SUMMARY.md](ENHANCED_MODEL_SUMMARY.md)
+→ See [ENHANCED_MODEL_SUMMARY.md](../model/ENHANCED_MODEL_SUMMARY.md)
 
 ---
 
@@ -219,7 +219,7 @@ python scripts/infer_daily.py --verbose --output predictions_2026-01-11.csv
 cat predictions_2026-01-11.csv
 
 # 5. Log to tracking file
-cat >> predictions_log.csv < predictions_2026-01-11.csv
+tail -n +2 predictions_2026-01-11.csv >> docs/status/predictions_log.csv
 ```
 
 **Expected time:** 5-10 minutes

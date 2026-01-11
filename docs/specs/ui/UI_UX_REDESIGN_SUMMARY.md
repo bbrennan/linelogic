@@ -306,17 +306,17 @@ Status: ● LIVE | Daily @ 9:00 UTC
 
 ## 🚀 Deploy Enhanced Version
 
-**File created:** `streamlit_app_enhanced.py`
+**File created:** `app/app_enhanced.py`
 
 **Test locally:**
 ```bash
-streamlit run streamlit_app_enhanced.py
+streamlit run app/app_enhanced.py
 ```
 
 **Deploy to production:**
 ```bash
-cp streamlit_app_enhanced.py streamlit_app.py
-git add streamlit_app.py
+cp app/app_enhanced.py app/app.py
+git add app/app.py
 git commit -m "UI/UX redesign: Professional dark theme, enhanced hierarchy"
 git push
 ```
@@ -354,7 +354,7 @@ git push
 
 - **[UI_UX_DESIGN_SYSTEM.md](UI_UX_DESIGN_SYSTEM.md)** — 10,000-word comprehensive design system
 - **[LOGO_DESIGN_BRIEF.md](LOGO_DESIGN_BRIEF.md)** — Ready-to-share designer brief
-- **[streamlit_app_enhanced.py](streamlit_app_enhanced.py)** — Enhanced dashboard implementation
+- **[app/app_enhanced.py](../../../app/app_enhanced.py)** — Enhanced dashboard implementation
 
 ---
 
@@ -395,7 +395,7 @@ After redesign:
 Current state: **Functional but forgettable (6/10)**  
 Enhanced state: **Professional quantitative terminal (9/10)**
 
-**Next action:** Deploy `streamlit_app_enhanced.py` and commission a logo.
+**Next action:** Deploy `app/app_enhanced.py` and commission a logo.
 
 ---
 

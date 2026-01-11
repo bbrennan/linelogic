@@ -102,9 +102,9 @@ Email automatically sends if `SENDGRID_API_KEY` secret is configured:
 
 1. Ensure secret is added (see section 4 above)
 2. Daily job runs automatically at 9 AM UTC
-3. Emails sent to: `bbrennan83@gmail.com` (configurable in workflow YAML)
+3. Emails sent to: `TO_EMAIL` (configured as a GitHub Actions secret)
 
-To change email recipient in GitHub Actions, edit `.github/workflows/daily-job.yml`:
+To change email recipient in GitHub Actions, set the `TO_EMAIL` repository secret (recommended) or edit `.github/workflows/daily-job.yml`.
 
 ```yaml
 - name: Run recommend-daily

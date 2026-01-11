@@ -59,7 +59,7 @@
 │                                                                  │
 │  🤖 LineLogic — Automated Sports Betting Analytics              │
 │  📊 Database: linelogic.db                                      │
-│  📧 Daily reports sent to bbrennan83@gmail.com                  │
+│  📧 Daily reports sent to your.email@example.com                │
 │                                                                  │
 │  ⏱️ Last refreshed: 2026-01-10 15:42:18 UTC                     │
 │  💡 Data updates automatically after each daily GitHub Actions   │
@@ -519,12 +519,12 @@ Deploy the enhanced version and commission a professional logo to complete the t
 **Files to Review:**
 - [UI_UX_DESIGN_SYSTEM.md](UI_UX_DESIGN_SYSTEM.md) — Full design system
 - [LOGO_DESIGN_BRIEF.md](LOGO_DESIGN_BRIEF.md) — Designer brief
-- [streamlit_app_enhanced.py](streamlit_app_enhanced.py) — Enhanced implementation
+- [app/app_enhanced.py](../../../app/app_enhanced.py) — Enhanced implementation
 - [UI_UX_REDESIGN_SUMMARY.md](UI_UX_REDESIGN_SUMMARY.md) — Quick summary
 
 **Next Step:** Deploy enhanced dashboard
 ```bash
-streamlit run streamlit_app_enhanced.py  # Test locally
-cp streamlit_app_enhanced.py streamlit_app.py  # Replace current
+streamlit run app/app_enhanced.py  # Test locally
+cp app/app_enhanced.py app/app.py  # Replace current
 git push  # Auto-deploys to Streamlit Cloud
 ```

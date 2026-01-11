@@ -492,4 +492,4 @@ Sports betting carries **inherent risks**:
 
 ---
 
-**Next**: [Architecture](../adr/0001_architecture.md) | [README](../README.md)
+**Next**: [Architecture](../../decisions/0001_architecture.md) | [README](../README.md)

@@ -84,7 +84,7 @@ ACCURACY BY CONFIDENCE TIER:
 
 ## Prediction Log Template
 
-Create file: `predictions_log.csv`
+Create file: `docs/status/predictions_log.csv`
 
 ```csv
 date,home_team,away_team,pred_home_win_prob,confidence_tier,home_team_rest_days,actual_home_win,tracked_yn,notes
@@ -156,7 +156,7 @@ date,home_team,away_team,pred_home_win_prob,confidence_tier,home_team_rest_days,
 - [ ] Check calibration error (target: <5%)
 - [ ] Review false positives (high-confidence errors, target: <5)
 - [ ] Compare to prior month (track trend)
-- [ ] Document findings in `validation_log.md`
+- [ ] Document findings in `docs/status/reports/validation_log.md`
 
 **Decision Points:**
 
@@ -177,7 +177,7 @@ date,home_team,away_team,pred_home_win_prob,confidence_tier,home_team_rest_days,
 ```python
 import pandas as pd
 
-log = pd.read_csv('predictions_log.csv')
+log = pd.read_csv("docs/status/predictions_log.csv")
 
 # Accuracy by specific matchups
 matchup_accuracy = log.groupby(['home_team', 'away_team']).agg({
@@ -264,7 +264,7 @@ Next Review: 2026-01-24
 
 ```bash
 python scripts/validate_predictions.py \
-  --predictions predictions_log.csv \
+  --predictions docs/status/predictions_log.csv \
   --by-tier --by-team --by-bucket \
   --export-json validation_report.json
 ```
@@ -275,7 +275,7 @@ python scripts/validate_predictions.py \
 
 ```bash
 python scripts/validate_predictions.py \
-  --predictions predictions_log.csv \
+  --predictions docs/status/predictions_log.csv \
   --export-csv tier_metrics_weekly.csv
 ```
 
@@ -327,15 +327,15 @@ python scripts/validate_predictions.py \
 ## Files & Artifacts
 
 ```
-predictions_log.csv                    # Main tracking log (append daily)
-predictions_2026-01-11.csv             # Daily predictions (auto-generated)
+docs/status/predictions_log.csv        # Main tracking log (append daily)
+docs/status/daily/predictions_2026-01-11.csv   # Daily predictions (auto-generated)
 monthly_predictions_2026-01.csv        # Monthly consolidated
 validation_report_2026-01.json         # Full validation report (JSON)
 tier_metrics_weekly.csv                # Tier-level metrics (CSV)
 
 scripts/
-├── infer_daily.py                     # Generate predictions
-├── validate_predictions.py            # Validation analysis [NEW]
+├── scripts/infer_daily.py             # Generate predictions
+├── scripts/validate_predictions.py    # Validation analysis
 └── VALIDATION_FRAMEWORK.md            # This file
 ```
 

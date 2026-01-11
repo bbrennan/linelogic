@@ -8,7 +8,7 @@
 ## 📦 What Was Delivered
 
 ### **Component 1: Daily Inference Script** ✅
-**File:** [scripts/infer_daily.py](scripts/infer_daily.py) (353 lines)
+**File:** [scripts/infer_daily.py](../../../scripts/infer_daily.py) (353 lines)
 
 **Features:**
 - ✓ Loads trained model + scaler
@@ -16,7 +16,7 @@
 - ✓ Engineers features automatically
 - ✓ **Auto-assigns confidence tiers** (TIER 1-4)
 - ✓ Outputs CSV with predictions + recommendations
-- ✓ Ready to run: `python scripts/infer_daily.py --verbose --output predictions_$(date +%Y-%m-%d).csv`
+- ✓ Ready to run: `python scripts/infer_daily.py --verbose --output docs/status/daily/predictions_$(date +%Y-%m-%d).csv`
 
 **Usage Pattern:**
 ```bash
@@ -48,7 +48,7 @@ python scripts/infer_daily.py --verbose --output predictions_2026-01-11.csv
 
 ### **Component 3: A/B Testing Framework** ✅
 
-**Part A: Python Script** - [scripts/validate_predictions.py](scripts/validate_predictions.py) (400+ lines)
+**Part A: Python Script** - [scripts/validate_predictions.py](../../../scripts/validate_predictions.py) (400+ lines)
 
 **Capabilities:**
 - ✓ Loads predictions log + actual game outcomes
@@ -63,7 +63,7 @@ python scripts/infer_daily.py --verbose --output predictions_2026-01-11.csv
 ```bash
 # Every Monday morning
 python scripts/validate_predictions.py \
-  --predictions predictions_log.csv \
+  --predictions docs/status/predictions_log.csv \
   --by-tier --by-team --by-bucket
 ```
 
@@ -88,14 +88,14 @@ python scripts/validate_predictions.py \
 | [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) | **PRINT THIS** - Step-by-step launch | Jan 10-11 |
 | [QUICK_REFERENCE.md](QUICK_REFERENCE.md) | **PRINT THIS** - 1-page desk reference | Daily |
 | [DEPLOYMENT_READY.md](DEPLOYMENT_READY.md) | Model specs + trustworthiness tiers | Reference |
-| [ENHANCED_MODEL_SUMMARY.md](ENHANCED_MODEL_SUMMARY.md) | Technical specifications | Reference |
+| [ENHANCED_MODEL_SUMMARY.md](../model/ENHANCED_MODEL_SUMMARY.md) | Technical specifications | Reference |
 | [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md) | A/B testing + tracking guide | Weekly |
 
 ---
 
 ## 🗂️ Additional Files Created
 
-- **[predictions_log.csv](predictions_log.csv)** - Template for tracking all predictions
+- **[docs/status/predictions_log.csv](../../status/predictions_log.csv)** - Template for tracking all predictions
   - Columns: date, home_team, away_team, pred_prob, tier, rest_days, actual_result, notes
   - Append daily results → Use for weekly validation
 
@@ -128,7 +128,7 @@ The daily inference script **auto-assigns** confidence tiers based on:
 - [ ] Activate `.venv`
 - [ ] Run: `python scripts/infer_daily.py --verbose --output predictions_2026-01-11.csv`
 - [ ] Review output (4-8 games expected)
-- [ ] Log to `predictions_log.csv`
+- [ ] Log to `docs/status/predictions_log.csv`
 - [ ] Notify team
 
 ### **Jan 11-17 (Week 1)**
@@ -158,7 +158,7 @@ python scripts/validate_predictions.py --help       # Works
 
 # 3. Data
 ls -la .linelogic/games_cache.csv                   # Training data
-ls -la predictions_log.csv                          # Tracking template
+ls -la docs/status/predictions_log.csv              # Tracking template
 
 # 4. Test Run
 python scripts/infer_daily.py --verbose --output test.csv
@@ -182,10 +182,10 @@ python scripts/infer_daily.py --verbose --output predictions_2026-01-11.csv
 cat predictions_2026-01-11.csv
 
 # 4. Log
-tail -n +2 predictions_2026-01-11.csv >> predictions_log.csv
+tail -n +2 predictions_2026-01-11.csv >> docs/status/predictions_log.csv
 
 # 5. Verify
-tail -5 predictions_log.csv
+tail -5 docs/status/predictions_log.csv
 ```
 
 **Expected output:** CSV with columns:
@@ -206,7 +206,7 @@ Example:
 ```bash
 # Monday morning after logging weekend results
 python scripts/validate_predictions.py \
-  --predictions predictions_log.csv \
+  --predictions docs/status/predictions_log.csv \
   --by-tier --by-team --by-bucket
 
 # Expected output:
@@ -236,7 +236,7 @@ python scripts/validate_predictions.py \
 | "What does TIER 1 mean?" | [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md#understanding-predictions) |
 | "How do I validate predictions?" | [VALIDATION_FRAMEWORK.md](VALIDATION_FRAMEWORK.md#weekly-validation-report) |
 | "Something broke. Help!" | [OPERATIONS_RUNBOOK.md#troubleshooting](OPERATIONS_RUNBOOK.md#troubleshooting) |
-| "Technical questions?" | [ENHANCED_MODEL_SUMMARY.md](ENHANCED_MODEL_SUMMARY.md) |
+| "Technical questions?" | [ENHANCED_MODEL_SUMMARY.md](../model/ENHANCED_MODEL_SUMMARY.md) |
 
 ---
 
@@ -267,7 +267,7 @@ python scripts/validate_predictions.py \
 - ✅ POC_DEPLOYMENT_PACKAGE.md
 - ✅ QUICK_REFERENCE.md (PRINT)
 - ✅ DEPLOYMENT_READY.md
-- ✅ ENHANCED_MODEL_SUMMARY.md
+- ✅ docs/specs/model/ENHANCED_MODEL_SUMMARY.md
 - ✅ OPERATIONS_RUNBOOK.md
 - ✅ VALIDATION_FRAMEWORK.md
 
@@ -276,7 +276,7 @@ python scripts/validate_predictions.py \
 - ✅ scripts/validate_predictions.py (validation)
 
 **Data Template (1 file):**
-- ✅ predictions_log.csv (tracking template)
+- ✅ docs/status/predictions_log.csv (tracking template)
 
 **Model Artifacts (Already Exist):**
 - ✅ .linelogic/nba_model_v1.0.0.pkl

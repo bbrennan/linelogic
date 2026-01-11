@@ -247,6 +247,6 @@ column_config={
 
 ---
 
-**Status:** ✅ IMPLEMENTED in streamlit_app_enhanced.py  
+**Status:** ✅ IMPLEMENTED in app/app_enhanced.py  
 **Version:** 1.0  
 **Date:** January 10, 2026

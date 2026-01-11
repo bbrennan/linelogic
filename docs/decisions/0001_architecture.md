@@ -213,7 +213,7 @@ We adopt a **layered, provider-abstraction architecture** with clear separation 
   - Commands: `check`, `recommend`, `backtest`, `report`
   - Uses Click library
 
-- **Streamlit** (`src/linelogic/app/streamlit_app.py` - future)
+- **Streamlit** (`app/app.py`)
   - Dashboard: Bankroll, P&L, calibration plots
   - Recommendation viewer
   - Manual bet logger

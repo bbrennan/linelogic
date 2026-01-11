@@ -22,7 +22,7 @@ Your LineLogic POC now has a complete email notification system for daily operat
 Both daily commands now support email:
 
 ```bash
-# Recommend with email (default: bbrennan83@gmail.com)
+# Recommend with email (default: your.email@example.com)
 linelogic recommend-daily --date 2026-01-15
 
 # Or skip email
@@ -46,8 +46,8 @@ Three files were added/updated:
 
 1. **`src/linelogic/config/settings.py`**: Added `sendgrid_api_key` field
 2. **`.github/workflows/daily-job.yml`**: Updated to pass SENDGRID_API_KEY and --email flags
-3. **`scripts/daily_linelogic.sh`**: Updated to include --email bbrennan83@gmail.com
-4. **`docs/12_email_setup.md`**: Complete SendGrid setup guide
+3. **`scripts/daily_linelogic.sh`**: Updated to include an email recipient
+4. **`docs/specs/setup/12_email_setup.md`**: Complete SendGrid setup guide
 
 ## Next Steps
 
@@ -71,7 +71,7 @@ SENDGRID_API_KEY=SG.your_actual_key_here
 Test it locally:
 ```bash
 linelogic recommend-daily --date 2026-01-15
-# Should show: "📧 Summary emailed to bbrennan83@gmail.com"
+# Should show: "📧 Summary emailed to your.email@example.com"
 ```
 
 ### 3. (Optional) Configure GitHub Actions
@@ -188,9 +188,9 @@ LOG_LEVEL=DEBUG linelogic recommend-daily --date 2026-01-15
 
 ## Documentation
 
-- **Email Setup**: [docs/12_email_setup.md](docs/12_email_setup.md)
-- **Local Scheduler**: [docs/10_daily_scheduler.md](docs/10_daily_scheduler.md)
-- **GitHub Actions**: [docs/11_github_actions_scheduler.md](docs/11_github_actions_scheduler.md)
+- **Email Setup**: [../specs/setup/12_email_setup.md](../specs/setup/12_email_setup.md)
+- **Local Scheduler**: [../specs/setup/10_daily_scheduler.md](../specs/setup/10_daily_scheduler.md)
+- **GitHub Actions**: [../specs/setup/11_github_actions_scheduler.md](../specs/setup/11_github_actions_scheduler.md)
 - **Updated README**: New daily operations section with examples
 
 ## Files Changed
@@ -201,7 +201,7 @@ LOG_LEVEL=DEBUG linelogic recommend-daily --date 2026-01-15
 - ✅ `src/linelogic/email_sender.py` - (Already existed, no changes)
 - ✅ `.github/workflows/daily-job.yml` - Updated with email flags and secrets
 - ✅ `scripts/daily_linelogic.sh` - Updated with email addresses
-- ✅ `docs/12_email_setup.md` - New comprehensive setup guide
+- ✅ `docs/specs/setup/12_email_setup.md` - New comprehensive setup guide
 - ✅ `README.md` - Added daily operations section and updated roadmap
 
 ## Next Phase: Model Training

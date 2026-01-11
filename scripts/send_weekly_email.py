@@ -98,20 +98,35 @@ def build_weekly_email(date_str: str, report: dict) -> str:
 
 
 def send_email(date_str: str) -> None:
-    report_path = f"validation_report_{date_str}.json"
-    try:
-        with open(report_path, "r", encoding="utf-8") as f:
-            report = json.load(f)
-    except FileNotFoundError:
+    candidate_paths = [
+        f"docs/status/reports/validation_report_{date_str}.json",
+        f"validation_report_{date_str}.json",  # legacy fallback
+    ]
+
+    report: dict | None = None
+    for report_path in candidate_paths:
+        try:
+            with open(report_path, "r", encoding="utf-8") as f:
+                report = json.load(f)
+            break
+        except FileNotFoundError:
+            continue
+
+    if report is None:
         print("⚠️  Validation report not found. Skipping email.")
         return
 
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASS")
     from_email = os.getenv("FROM_EMAIL", smtp_user)
+    to_email = os.getenv("TO_EMAIL") or ""
 
     if not (smtp_user and smtp_pass):
         print("⚠️  SMTP credentials not set. Skipping email.")
+        return
+
+    if not to_email:
+        print("⚠️  TO_EMAIL not set. Skipping email.")
         return
 
     html = build_weekly_email(date_str, report)
@@ -119,7 +134,7 @@ def send_email(date_str: str) -> None:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"LineLogic Weekly Validation - Week Ending {date_str}"
     msg["From"] = from_email
-    msg["To"] = "bbrennan83@gmail.com"
+    msg["To"] = to_email
     msg.attach(MIMEText(html, "html"))
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:

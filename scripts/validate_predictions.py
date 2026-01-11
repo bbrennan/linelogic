@@ -6,9 +6,9 @@ This script provides a framework for validating model confidence tiers in produc
 Run this weekly or monthly to assess model calibration by segment.
 
 Usage:
-  python scripts/validate_predictions.py --predictions predictions_log.csv
-  python scripts/validate_predictions.py --predictions predictions_log.csv --by-tier
-  python scripts/validate_predictions.py --predictions predictions_log.csv --by-team --week 2026-W02
+    python scripts/validate_predictions.py --predictions docs/status/predictions_log.csv
+    python scripts/validate_predictions.py --predictions docs/status/predictions_log.csv --by-tier
+    python scripts/validate_predictions.py --predictions docs/status/predictions_log.csv --by-team --week 2026-W02
 """
 
 import argparse

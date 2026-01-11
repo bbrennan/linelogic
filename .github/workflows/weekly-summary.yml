@@ -35,18 +35,20 @@ jobs:
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+                  TO_EMAIL: ${{ secrets.TO_EMAIL }}
               run: |
                   python scripts/validate_predictions.py \
-                    --predictions predictions_log.csv \
+                    --predictions docs/status/predictions_log.csv \
                     --by-tier --by-team --by-bucket \
-                    --export-json validation_report_${{ steps.dates.outputs.end_date }}.json \
-                    --export-csv tier_metrics_${{ steps.dates.outputs.end_date }}.csv
+                    --export-json docs/status/reports/validation_report_${{ steps.dates.outputs.end_date }}.json \
+                    --export-csv docs/status/reports/tier_metrics_${{ steps.dates.outputs.end_date }}.csv
 
             - name: Send validation email
               env:
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+                TO_EMAIL: ${{ secrets.TO_EMAIL }}
               run: |
                   python scripts/send_weekly_email.py ${{ steps.dates.outputs.end_date }}
 
@@ -55,16 +57,21 @@ jobs:
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+                  TO_EMAIL: ${{ secrets.TO_EMAIL }}
               continue-on-error: true
               run: |
-                  python -m linelogic.app.cli weekly-summary --date ${{ steps.dates.outputs.end_date }} --email bbrennan83@gmail.com 2>/dev/null || true
+                  if [ -n "${TO_EMAIL:-}" ]; then
+                    python -m linelogic.app.cli weekly-summary --date ${{ steps.dates.outputs.end_date }} --email "$TO_EMAIL" 2>/dev/null || true
+                  else
+                    python -m linelogic.app.cli weekly-summary --date ${{ steps.dates.outputs.end_date }} --no-email 2>/dev/null || true
+                  fi
 
             - name: Commit validation reports
               run: |
                   git config --local user.email "action@github.com"
                   git config --local user.name "LineLogic Bot"
 
-                  git add validation_report_*.json tier_metrics_*.csv 2>/dev/null || true
+                  git add docs/status/reports/validation_report_*.json docs/status/reports/tier_metrics_*.csv 2>/dev/null || true
 
                   if git diff --cached --quiet; then
                     echo "No validation reports to commit"
@@ -79,6 +86,6 @@ jobs:
               with:
                   name: linelogic-validation-${{ steps.dates.outputs.end_date }}
                   path: |
-                      validation_report_*.json
-                      tier_metrics_*.csv
+                  docs/status/reports/validation_report_*.json
+                  docs/status/reports/tier_metrics_*.csv
                   retention-days: 30

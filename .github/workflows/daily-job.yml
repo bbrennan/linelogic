@@ -38,15 +38,15 @@ jobs:
             - name: Generate daily predictions
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
-                BALLDONTLIE_TIER: ${{ secrets.BALLDONTLIE_TIER }}
+                  BALLDONTLIE_TIER: ${{ secrets.BALLDONTLIE_TIER }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
               run: |
-                  python scripts/infer_daily.py --date ${{ steps.dates.outputs.today }} --output predictions_${{ steps.dates.outputs.today }}.csv --verbose
+                  python scripts/infer_daily.py --date ${{ steps.dates.outputs.today }} --output docs/status/daily/predictions_${{ steps.dates.outputs.today }}.csv --verbose
 
             - name: Store predictions to database
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
-                BALLDONTLIE_TIER: ${{ secrets.BALLDONTLIE_TIER }}
+                  BALLDONTLIE_TIER: ${{ secrets.BALLDONTLIE_TIER }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
               run: |
                   python -m linelogic.app.cli recommend-daily --date ${{ steps.dates.outputs.today }} --no-email
@@ -59,14 +59,20 @@ jobs:
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+                  TO_EMAIL: ${{ secrets.TO_EMAIL }}
               run: |
-                  python -m linelogic.app.cli settle-daily --date ${{ steps.dates.outputs.yesterday }} --email bbrennan83@gmail.com
+                  if [ -n "${TO_EMAIL:-}" ]; then
+                    python -m linelogic.app.cli settle-daily --date ${{ steps.dates.outputs.yesterday }} --email "$TO_EMAIL"
+                  else
+                    python -m linelogic.app.cli settle-daily --date ${{ steps.dates.outputs.yesterday }} --no-email
+                  fi
 
             - name: Send daily email
               env:
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+                TO_EMAIL: ${{ secrets.TO_EMAIL }}
               run: |
                   python scripts/send_daily_email.py ${{ steps.dates.outputs.today }}
 
@@ -75,7 +81,7 @@ jobs:
                   git config --local user.email "action@github.com"
                   git config --local user.name "LineLogic Bot"
 
-                  git add predictions_*.csv .linelogic/games_cache.csv .linelogic/linelogic.db predictions_log.csv 2>/dev/null || true
+                  git add docs/status/daily/predictions_*.csv docs/status/predictions_log.csv .linelogic/games_cache.csv .linelogic/linelogic.db 2>/dev/null || true
 
                   if git diff --cached --quiet; then
                     echo "No changes to commit"

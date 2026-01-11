@@ -28,6 +28,21 @@ Add two secrets:
 
 **Never commit these to git!**
 
+#### Quick Verify (Recommended)
+
+After rotating a key (especially `ODDS_API_KEY`), do a fast verification:
+
+1. GitHub → **Repo → Settings → Secrets and variables → Actions**
+2. Confirm these secret names exist (exact spelling):
+  - `BALLDONTLIE_API_KEY`
+  - `ODDS_API_KEY`
+  - (If emailing is enabled) `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL`, `TO_EMAIL`
+3. Go to **Actions → LineLogic Daily Job → Run workflow** and run it once.
+
+Notes:
+- GitHub will not reveal secret values after you save them (by design).
+- If a key is missing, the workflow should fail quickly or skip optional steps.
+
 ### 3. Enable Actions
 
 Go to: **GitHub Repo → Actions → Enable workflows**

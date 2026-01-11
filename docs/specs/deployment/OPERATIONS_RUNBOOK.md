@@ -11,6 +11,7 @@
 ### Before You Begin
 - [ ] Ensure `.venv` is activated: `source .venv/bin/activate`
 - [ ] Verify BALLDONTLIE_API_KEY is set: `echo $BALLDONTLIE_API_KEY`
+- [ ] Verify ODDS_API_KEY is set (if ingesting odds): `echo $ODDS_API_KEY`
 - [ ] Check model file exists: `ls -la .linelogic/nba_model_v1.0.0.pkl`
 
 ### Daily Prediction Run (5 minutes)

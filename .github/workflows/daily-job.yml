@@ -35,15 +35,12 @@ jobs:
                   echo "yesterday=$YESTERDAY" >> $GITHUB_OUTPUT
                   echo "Dates: TODAY=$TODAY, YESTERDAY=$YESTERDAY"
 
-            - name: Run recommend-daily
+            - name: Generate daily predictions
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-                  SMTP_USER: ${{ secrets.SMTP_USER }}
-                  SMTP_PASS: ${{ secrets.SMTP_PASS }}
-                  FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
               run: |
-                  python -m linelogic.app.cli recommend-daily --date ${{ steps.dates.outputs.today }} --email bbrennan83@gmail.com
+                  python scripts/infer_daily.py --date ${{ steps.dates.outputs.today }} --output predictions_${{ steps.dates.outputs.today }}.csv --verbose
 
             - name: Run settle-daily
               env:

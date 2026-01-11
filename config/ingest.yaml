@@ -1,0 +1,42 @@
+# LineLogic ingestion config (no secrets)
+project:
+  data_dir: "./data"
+  timezone: "America/Chicago"
+
+sports:
+  - key: "basketball_nba"
+    league: "nba"
+    bookmakers: ["pinnacle", "draftkings", "fanduel", "betmgm"]
+    markets: ["h2h", "spreads", "totals"]
+
+odds_snapshots:
+  buckets:
+    - name: "OPEN"
+      minutes_before: 999999
+    - name: "T-6H"
+      minutes_before: 360
+    - name: "T-60M"
+      minutes_before: 60
+    - name: "T-15M"
+      minutes_before: 15
+    - name: "CLOSE"
+      minutes_before: 1
+  max_lookahead_days: 2
+
+providers:
+  oddsapi:
+    base_url: "https://api.the-odds-api.com"
+    regions: ["us"]
+    odds_format: "decimal"
+    date_format: "iso"
+    timeout_seconds: 20
+    max_retries: 6
+  balldontlie:
+    base_url: "https://api.balldontlie.io"
+    timeout_seconds: 20
+    max_retries: 6
+
+runtime:
+  log_level: "INFO"
+  parallelism: 4
+  write_parquet_compression: "snappy"

@@ -1,0 +1,11 @@
+date,home_team,away_team,pred_home_win_prob,pred_away_win_prob,home_team_rest_days,away_team_rest_days,confidence_tier,recommendation
+2026-01-11,Orlando Magic,New Orleans Pelicans,0.7735,0.2265,257,273,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY
+2026-01-11,Memphis Grizzlies,Brooklyn Nets,0.8193,0.1807,260,273,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY
+2026-01-11,Toronto Raptors,Philadelphia 76ers,0.6189,0.3811,273,273,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY
+2026-01-11,Portland Trail Blazers,New York Knicks,0.4093,0.5907,273,225,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY
+2026-01-11,Minnesota Timberwolves,San Antonio Spurs,0.728,0.272,228,273,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY
+2026-01-11,Oklahoma City Thunder,Miami Heat,0.8286,0.1714,203,258,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY
+2026-01-11,Denver Nuggets,Milwaukee Bucks,0.5852,0.4148,238,257,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY
+2026-01-11,Phoenix Suns,Washington Wizards,0.747,0.253,273,273,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY
+2026-01-11,Golden State Warriors,Atlanta Hawks,0.6347,0.3653,242,268,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY
+2026-01-11,Sacramento Kings,Houston Rockets,0.4672,0.5328,270,252,TIER 3 (MEDIUM),CROSS-CHECK EXTERNALLY

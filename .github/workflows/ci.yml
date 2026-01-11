@@ -1,0 +1,75 @@
+name: CI
+
+on:
+    pull_request:
+        branches: [main, develop]
+    push:
+        branches: [develop]
+
+jobs:
+    validate-ingest:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+                  cache: "pip"
+
+            - name: Install
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install -e .
+
+            - name: Ingest current teams
+              run: |
+                  python - << 'PY'
+                  from linelogic.ingest.pipeline import IngestPipeline
+                  p = IngestPipeline()
+                  mp = p.ingest_current_teams()
+                  import json
+                  d = json.loads(open(mp).read())
+                  print(d)
+                  if d['count'] != 30 or d['errors']:
+                    raise SystemExit('Current teams ingest failed')
+                  PY
+
+            - name: Ingest daily games (today)
+              run: |
+                  python - << 'PY'
+                  from datetime import datetime
+                  from linelogic.ingest.pipeline import IngestPipeline
+                  p = IngestPipeline()
+                  date_str = datetime.utcnow().strftime('%Y-%m-%d')
+                  mp = p.ingest_daily_games(date_str)
+                  import json
+                  d = json.loads(open(mp).read())
+                  print(d)
+                  if d['errors']:
+                    raise SystemExit('Daily games ingest validation errors')
+                  PY
+
+    test:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.11"
+                  cache: "pip"
+
+            - name: Install dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install -e .
+                  pip install pytest pytest-cov
+
+            - name: Run unit tests
+              run: |
+                  pytest tests/test_contracts.py -v --cov=src/linelogic/data --cov-report=term

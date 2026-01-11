@@ -384,31 +384,43 @@ class DailyInferenceEngine:
         games_df["season"] = games_df["date"].dt.year
 
         # Compute live team stats for teams playing today (prefer over cache)
-        team_ids = set(games_df["home_team_id"].tolist() + games_df["away_team_id"].tolist())
+        team_ids = set(
+            games_df["home_team_id"].tolist() + games_df["away_team_id"].tolist()
+        )
         if self.verbose:
             print(f"Computing live team stats for {len(team_ids)} teams...")
 
         api = BalldontlieProvider()
 
-        def _compute_live_team_stats(season: int, api: BalldontlieProvider, team_ids: set[int]) -> pd.DataFrame:
+        def _compute_live_team_stats(
+            season: int, api: BalldontlieProvider, team_ids: set[int]
+        ) -> pd.DataFrame:
             current_teams = {t["id"]: t["full_name"] for t in api.get_current_teams()}
             records = []
             for tid in team_ids:
                 try:
                     games = api.get_team_games(tid, season)
-                    finals = [g for g in games if g.get("status") == "Final" and g.get("home_score") is not None and g.get("away_score") is not None]
+                    finals = [
+                        g
+                        for g in games
+                        if g.get("status") == "Final"
+                        and g.get("home_score") is not None
+                        and g.get("away_score") is not None
+                    ]
                     if not finals:
-                        records.append({
-                            "season": season,
-                            "team": current_teams.get(tid, ""),
-                            "win_pct": 0.5,
-                            "net_rating": 0.0,
-                            "pace": 100.0,
-                            "off_rating": 110.0,
-                            "def_rating": 110.0,
-                            "off_3pa_rate": 0.38,
-                            "def_opp_3pa_rate": 0.38,
-                        })
+                        records.append(
+                            {
+                                "season": season,
+                                "team": current_teams.get(tid, ""),
+                                "win_pct": 0.5,
+                                "net_rating": 0.0,
+                                "pace": 100.0,
+                                "off_rating": 110.0,
+                                "def_rating": 110.0,
+                                "off_3pa_rate": 0.38,
+                                "def_opp_3pa_rate": 0.38,
+                            }
+                        )
                         continue
                     wins = 0
                     diffs = []
@@ -429,23 +441,31 @@ class DailyInferenceEngine:
                     off_3pa_rate = 0.38
                     try:
                         per_game = api.get_team_season_game_stats(tid, season)
-                        ratios = [v["fg3a"] / v["fga"] for v in per_game.values() if v.get("fga", 0) > 0]
+                        ratios = [
+                            v["fg3a"] / v["fga"]
+                            for v in per_game.values()
+                            if v.get("fga", 0) > 0
+                        ]
                         if ratios:
                             off_3pa_rate = round(float(np.mean(ratios)), 4)
                     except Exception:
                         pass
 
-                    records.append({
-                        "season": season,
-                        "team": current_teams.get(tid, ""),
-                        "win_pct": round(wins / gp, 4) if gp > 0 else 0.5,
-                        "net_rating": round(float(np.mean(diffs)) if diffs else 0.0, 2),
-                        "pace": 100.0,
-                        "off_rating": round(float(np.mean(pf)) if pf else 110.0, 2),
-                        "def_rating": round(float(np.mean(pa)) if pa else 110.0, 2),
-                        "off_3pa_rate": off_3pa_rate,
-                        "def_opp_3pa_rate": 0.38,
-                    })
+                    records.append(
+                        {
+                            "season": season,
+                            "team": current_teams.get(tid, ""),
+                            "win_pct": round(wins / gp, 4) if gp > 0 else 0.5,
+                            "net_rating": round(
+                                float(np.mean(diffs)) if diffs else 0.0, 2
+                            ),
+                            "pace": 100.0,
+                            "off_rating": round(float(np.mean(pf)) if pf else 110.0, 2),
+                            "def_rating": round(float(np.mean(pa)) if pa else 110.0, 2),
+                            "off_3pa_rate": off_3pa_rate,
+                            "def_opp_3pa_rate": 0.38,
+                        }
+                    )
                 except Exception as e:
                     if self.verbose:
                         print(f"Warning: live stats failed for team {tid}: {e}")
@@ -461,7 +481,9 @@ class DailyInferenceEngine:
                     msg += f" ({latest_season})"
                 print(msg)
 
-        team_avgs_effective_df = live_team_avgs_df if not live_team_avgs_df.empty else team_avgs_df
+        team_avgs_effective_df = (
+            live_team_avgs_df if not live_team_avgs_df.empty else team_avgs_df
+        )
 
         # Initialize feature engineer preferring live stats
         engineer = FeatureEngineer(

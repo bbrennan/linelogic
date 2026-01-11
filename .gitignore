@@ -84,6 +84,8 @@ models/checkpoints/
 experiments/
 .linelogic/
 !.linelogic/linelogic.db
+!.linelogic/*.pkl
+!.linelogic/*_metadata.json
 
 # macOS
 .DS_Store

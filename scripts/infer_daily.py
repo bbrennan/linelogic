@@ -19,6 +19,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from evidently.report import Report
+from evidently.metric_preset import DataDriftPreset
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -149,20 +151,32 @@ class DailyInferenceEngine:
             return "2-3 days"
         return "4+ days"
 
-    def score_games(self, games_df, engineer):
-        """Score a dataframe of games."""
+    def score_games(self, games_df, engineer, collect_features: bool = False):
+        """Score a dataframe of games and optionally collect feature values."""
         if games_df.empty:
-            return pd.DataFrame()
+            return (
+                (pd.DataFrame(), pd.DataFrame()) if collect_features else pd.DataFrame()
+            )
 
         try:
             # For inference, we extract features one game at a time WITHOUT updating state
             # (state updates require actual results which we don't have for upcoming games)
             predictions = []
+            feature_records = [] if collect_features else None
 
             for idx, row in games_df.iterrows():
                 try:
                     # Extract features for this single game (no state update)
                     features = engineer._extract_game_features(row)
+
+                    # Optionally store feature values for drift monitoring
+                    if collect_features:
+                        feature_records.append(
+                            {
+                                fname: features.get(fname, 0)
+                                for fname in self.feature_names
+                            }
+                        )
 
                     # Extract features in correct order
                     X = np.array(
@@ -222,7 +236,10 @@ class DailyInferenceEngine:
                         }
                     )
 
-            return pd.DataFrame(predictions)
+            predictions_df = pd.DataFrame(predictions)
+            if collect_features:
+                return predictions_df, pd.DataFrame(feature_records)
+            return predictions_df
 
         except Exception as e:
             if self.verbose:
@@ -230,7 +247,9 @@ class DailyInferenceEngine:
                 import traceback
 
                 traceback.print_exc()
-            return pd.DataFrame()
+            return (
+                (pd.DataFrame(), pd.DataFrame()) if collect_features else pd.DataFrame()
+            )
 
     def run(self, date=None, output_csv=None):
         """
@@ -501,7 +520,17 @@ class DailyInferenceEngine:
             )
 
         # Score games
-        predictions_df = self.score_games(games_df, engineer)
+        predictions_df, features_df = self.score_games(
+            games_df, engineer, collect_features=True
+        )
+
+        # Run drift monitoring using Evidently
+        drift_detected = self.run_drift_report(
+            current_features=features_df,
+            reference_path=Path(".linelogic/reference_features.csv"),
+            report_dir=Path(".linelogic/drift_reports"),
+            report_name=f"drift_{date.strftime('%Y%m%d')}.html",
+        )
 
         # Save if requested
         if output_csv:
@@ -531,7 +560,79 @@ class DailyInferenceEngine:
             for tier, count in tier_counts.items():
                 print(f"  {tier}: {count}")
 
+            if drift_detected is not None:
+                print(f"\nData drift detected? {'YES' if drift_detected else 'NO'}")
+
         return predictions_df
+
+    def run_drift_report(
+        self,
+        current_features: pd.DataFrame,
+        reference_path: Path,
+        report_dir: Path,
+        report_name: str,
+    ) -> bool | None:
+        """Generate Evidently data drift report comparing current vs reference features.
+
+        If no reference file exists, initializes it using the current features.
+        Returns True/False when drift is detected, None when insufficient data.
+        """
+        if current_features.empty:
+            if self.verbose:
+                print("No features available for drift check; skipping.")
+            return None
+
+        # Ensure directories exist
+        report_dir.mkdir(parents=True, exist_ok=True)
+        reference_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Align columns to feature names
+        columns = [c for c in self.feature_names if c in current_features.columns]
+        if not columns:
+            if self.verbose:
+                print("No matching feature columns for drift check; skipping.")
+            return None
+
+        current_df = current_features[columns].copy()
+
+        # Load or initialize reference
+        if reference_path.exists():
+            reference_df = pd.read_csv(reference_path)
+            reference_df = reference_df[columns].copy()
+        else:
+            reference_df = current_df.copy()
+            reference_df.to_csv(reference_path, index=False)
+            if self.verbose:
+                print(f"Initialized reference features at {reference_path}")
+
+        # If reference is empty, cannot compute drift
+        if reference_df.empty:
+            if self.verbose:
+                print("Reference features empty; skipping drift computation.")
+            return None
+
+        # Build Evidently report
+        report = Report(metrics=[DataDriftPreset()])
+        report.run(reference_data=reference_df, current_data=current_df)
+
+        html_path = report_dir / report_name
+        json_path = html_path.with_suffix(".json")
+        report.save_html(str(html_path))
+
+        summary = report.as_dict()
+        with open(json_path, "w") as f:
+            json.dump(summary, f, indent=2)
+
+        drift_detected = (
+            summary.get("metrics", [{}])[0].get("result", {}).get("dataset_drift")
+        )
+
+        if self.verbose:
+            print(f"Drift report saved to {html_path}")
+            print(f"Drift summary saved to {json_path}")
+            print(f"Data drift detected? {drift_detected}")
+
+        return drift_detected
 
 
 def main():

@@ -1,272 +1,347 @@
 # LineLogic — NBA Game Winner Modeling (Doc + Implementation Plan)
 
-**Last updated:** 2026-01-10  
+**Last updated:** 2026-01-11  
 **Owner:** LineLogic  
-**Objective:** Produce **leakage-safe** pregame probabilities `P(home_win)` for NBA games, with clean evaluation (log loss / Brier / calibration) and a clear path to adding market priors and roster/injury intelligence.
+**Objective:** Produce **leakage-safe** pregame probabilities `P(home_win)` for NBA games, with clean evaluation (log loss / Brier / calibration), **paper-trading validation**, and a clear path to using **market odds as a benchmark/prior** plus roster/injury intelligence.
 
 ---
 
 ## 0) Why this doc exists
 
-We already have a promising POC model (per your summary). This doc:
+We already have a promising POC model (per your internal summary). This doc is the blueprint for making it **trustworthy, reproducible, and extensible**.
 
-1. **Surveys proven modeling techniques** for NBA game-winner prediction.
-2. Gives a **strong, opinionated review** of the current model (what’s solid vs what’s risky).
-3. Defines a **leakage-safe data contract** (“as-of” feature semantics).
-4. Proposes **new feature families** with explicit build steps.
-5. Lists **all target data sources** (sports + injuries + odds + travel/timezone + weather + social/news), with links to the most credible references.
-6. Provides an **implementation plan** (modules, classes, and milestones).
+This doc will:
+1. Define the **non-negotiable** data and modeling rules (leakage, as-of, time splits).
+2. Establish the **benchmarks we must beat** (Elo-only, market baseline, market+model).
+3. Propose **feature families** that matter (travel, pace-adjusted form, roster strength).
+4. Describe a **Champion/Challenger** model strategy (Logistic as champion; calibrated GBDT as challenger).
+5. Specify **data sources** and “snapshot” requirements.
+6. Provide an **implementation plan** with milestones and acceptance criteria.
 
 ---
 
-## 1) Strong, opinionated review of the current POC model
+## 1) Principles (non-negotiable rules)
 
-### 1.1 What’s strong
-- You’re using **proper scoring rules** (log loss + Brier). That’s the correct evaluation framework for probability models.
-- Your feature set is directionally correct: **team strength (Elo), rest, recent form**, and some roster intelligence.
-- Feature selection + collinearity pruning is good hygiene.
+### 1.1 “As-of” semantics for every feature
+For a game at datetime **D**, the model may only use information that was available **strictly before D**.
 
-### 1.2 What’s concerning (and must be resolved before we trust the numbers)
-Your reported lift from ~53% to ~69% accuracy with log loss ~0.47 is *possible*, but **it’s “too good” unless the pipeline is extremely clean**. In my experience, this level of jump often indicates one or more of:
+**Hard rule:** Every feature must have an explicit **AS_OF definition** and a reproducible build query/window.
 
-#### A) Leakage through season-level “advanced metrics”
-If your CSV contains **end-of-season PER/BPM/WS48** and you’re applying it to games earlier in the same season, that is look-ahead leakage. Basketball-Reference style season aggregates are descriptive; unless you build them as-of date, you’re using future information.
+### 1.2 Time-aware evaluation (no random splits for primary claims)
+NBA is time-dependent (rosters, form, injuries, strategies, schedule density).  
+Primary evaluation must use **forward-chaining** or season-forward splits.
 
-**Hard rule:** any season-level metric used in a pregame model must be either:
-- prior-season-based (a prior), or
-- computed strictly from games **before** the game date.
+**Hard rule:** All “headline performance” numbers must come from **out-of-time** evaluation.
 
-#### B) Leakage through lineup continuity / “starter” artifacts
-Lineup continuity is useful, but dangerous. If “starter” flags or minutes reflect postgame outcomes (or include the current game), your model will look fantastic for the wrong reason.
+### 1.3 Snapshotting external data is required (not optional)
+Anything that changes over time (odds, injuries, lineup news, social signals) must be stored as a timestamped snapshot.
 
-**Hard rule:** lineup/continuity features must be computed using **only games before tipoff**.
+**Hard rule:** if we can’t prove what we knew at prediction time, we cannot trust the backtest.
 
-#### C) Split strategy risk
-Your summary says “stratified POC.” If this means random stratified splitting, it can cause subtle leakage (e.g., team identity effects learned from later-season games influence earlier-season predictions). NBA is time-dependent; you want time-aware validation.
+### 1.4 Probability quality > accuracy
+LineLogic is a probability engine. We optimize:
+- **Log loss**
+- **Brier score**
+- **Calibration quality** (reliability buckets, ECE/MCE artifacts)
+Accuracy is secondary.
 
-**Hard rule:** primary validation is **time-based**, ideally:
+---
+
+## 2) Strong, opinionated review of the current POC model (what stays, what must change)
+
+### 2.1 What’s strong
+- You’re using **proper scoring rules** (log loss + Brier).
+- You’re using sensible first-order signals: **team strength (Elo), rest, recent form**.
+- You’re doing some collinearity controls and feature selection hygiene.
+
+### 2.2 What’s risky (and must be resolved before trusting performance claims)
+Your reported jump is plausible, but **suspiciously strong** unless the pipeline is airtight.
+
+#### A) Leakage via season-level “advanced metrics”
+If PER/BPM/WS48 (or similar) are end-of-season aggregates applied to early-season games, that is look-ahead leakage.
+
+**Hard rule:** season-level metrics must be either:
+- prior-season priors, or
+- computed strictly from games with datetime `< D` for each game.
+
+#### B) Leakage via lineup continuity / “starter” artifacts
+Starter flags and minutes are often only finalized postgame. If your continuity uses realized starters/minutes that include game D, it will inflate performance.
+
+**Hard rule:** continuity and minutes-share features must be based on games strictly before D.
+
+#### C) Split strategy risk (“stratified” or random splitting)
+Random splitting creates subtle look-ahead and “future team identity” leakage.
+
+**Hard rule:** primary validation is time-based:
 - train: seasons up to year N-1
-- validate: season N (early)
-- test: season N (late) or season N+1
+- validate: season N (early segment)
+- test: season N (late segment) or season N+1
 
-### 1.3 Bottom line
-Your current model is a great *prototype*, but before we celebrate the scores we must make it **compliance-grade leakage-safe**. Expect performance to drop after the audit. That’s okay; trustworthy > flashy.
-
----
-
-## 2) Advanced survey: NBA game winner modeling techniques
-
-This section outlines the techniques we’ll support (or at least benchmark against), ordered by practical value.
-
-### 2.1 Market baseline (later phase, but the ultimate benchmark)
-If you have access to **moneyline/spread**, the market is generally the strongest single predictor because it aggregates injuries, rest, matchup, and public/pro info.
-
-- A standard strategy is to treat the market probability as a **prior** and model a small residual.
-- This is not “defeatist”; it’s realistic. The bar is beating a sharp baseline.
-
-References / starting points:
-- The Odds API (odds + markets docs): https://the-odds-api.com/  
-- Betting markets & player props markets overview: https://the-odds-api.com/sports-odds-data/betting-markets.html  
-- v4 API guide (oddsFormat, endpoints): https://the-odds-api.com/liveapi/guides/v4/
-
-### 2.2 Elo family (must-have baseline)
-Elo remains one of the best **simple, robust** NBA win models when implemented correctly (home advantage + margin of victory multiplier).
-
-FiveThirtyEight’s NBA Elo details include a margin-of-victory multiplier formula:
-- https://fivethirtyeight.com/features/how-we-calculate-nba-elo-ratings/
-
-Related methodology overview:
-- https://fivethirtyeight.com/methodology/how-our-nba-predictions-work/
-
-### 2.3 SRS / points-differential power ratings
-SRS (Simple Rating System) is a team rating in points above/below average that incorporates strength of schedule.
-
-- Sports-Reference “SRS calculation details”: https://www.sports-reference.com/blog/2015/03/srs-calculation-details/
-- Basketball-Reference blog SRS page: https://www.basketball-reference.com/blog/indexba52.html?p=39
-- Glossary entry: https://www.basketball-reference.com/about/glossary.html
-
-### 2.4 Efficiency / Four-Factors style models (possession-based)
-A strong modeling path is:
-1) estimate possessions (pace)
-2) estimate offense/defense efficiency (per 100 poss)
-3) derive expected margin
-4) map margin to win probability
-
-Four Factors references:
-- Basketball-Reference Four Factors page: https://www.basketball-reference.com/about/factors.html  
-- Cleaning the Glass Four Factors guide: https://cleaningtheglass.com/stats/guide/league_four_factors  
-- Background: https://squared2020.com/2017/09/05/introduction-to-olivers-four-factors/
-
-### 2.5 Player-impact driven models (high leverage)
-These are typically superior to PER/WS48 for win prediction because they estimate **impact on point differential**.
-
-EPM (Estimated Plus-Minus):
-- EPM methodology: https://dunksandthrees.com/about/epm  
-- Team EPM explanation (minutes-weighted aggregation): https://dunksandthrees.com/ratings  
-- EPM page (predictive framing): https://dunksandthrees.com/epm
-
-DARKO / DPM:
-- Explanation page (DARKO acronym + predictive intent): https://www.nbastuffer.com/analytics101/darko-daily-plus-minus/  
-- DARKO app: https://apanalytics.shinyapps.io/DARKO/
-
-### 2.6 Bayesian / state-space models (optional, “math first”)
-Team strength evolves over time. A state-space model (random walk on latent team strength with updates from outcomes/margins + covariates like travel/rest/injuries) tends to improve calibration and stabilize early season predictions.
-
-We won’t implement this first, but we’ll design the system so it can be added.
+### 2.3 Bottom line
+The POC is a great prototype, but it must be elevated to **audit-grade** before we let the numbers drive product decisions.
 
 ---
 
-## 3) “Indexes” (ratings) we should support and how they’re built
+## 3) Benchmarks we must beat (add this early and keep it forever)
 
-### 3.1 EloIndex (winner-focused)
-**Inputs:** game results (winner), optional margin of victory, home/away  
-**Output:** `elo_home`, `elo_away`, `elo_diff`, `p_home_win_elo`
+This is the “truth table” that prevents self-delusion.
 
-**Build:**
-- Initialize team ratings (e.g., 1500).
-- Home advantage offset.
-- Expected win probability = logistic function of elo diff.
-- Update = K × MOV multiplier × (actual - expected).
+### 3.1 Benchmark A — Elo-only baseline
+A clean Elo implementation is a required baseline.
+
+- FiveThirtyEight Elo details:  
+  https://fivethirtyeight.com/features/how-we-calculate-nba-elo-ratings/  
+- 538 NBA forecast methodology:  
+  https://fivethirtyeight.com/methodology/how-our-nba-predictions-work/
+
+### 3.2 Benchmark B — Market implied probability (when odds are available)
+The market aggregates injuries/news faster than most models. It is the strongest baseline.
+
+- The Odds API: https://the-odds-api.com/  
+- Betting markets overview: https://the-odds-api.com/sports-odds-data/betting-markets.html  
+- v4 API guide: https://the-odds-api.com/liveapi/guides/v4/
+
+### 3.3 Benchmark C — Market-as-prior blend
+We should implement the blend early (paper mode is enough):
+
+`p_final = α * p_market + (1-α) * p_model`
+
+We tune α to improve out-of-time log loss and calibration.
+
+### 3.4 Benchmark D — Elo + market + model residual
+This is the likely “MVP best practice” path:
+- Elo provides structural stability.
+- Market provides aggregated real-time information.
+- Model provides a residual edge and feature explanations.
+
+---
+
+## 4) Advanced survey: NBA game-winner modeling techniques (what we support)
+
+### 4.1 Elo family (must-have baseline)
+- Home-court adjustment
+- MOV multiplier
+- K factor tuning
 
 Reference:
 - https://fivethirtyeight.com/features/how-we-calculate-nba-elo-ratings/
 
-### 3.2 SRSLikeIndex (points-focused)
+### 4.2 SRS / points-differential power ratings
+SRS provides a points-based team strength adjusted for strength-of-schedule.
+
+References:
+- https://www.sports-reference.com/blog/2015/03/srs-calculation-details/  
+- https://www.basketball-reference.com/blog/indexba52.html?p=39  
+- https://www.basketball-reference.com/about/glossary.html
+
+### 4.3 Efficiency / Four-Factors style models (possession-based)
+Better than raw point diff because pace confounds margin.
+
+References:
+- https://www.basketball-reference.com/about/factors.html  
+- https://cleaningtheglass.com/stats/guide/league_four_factors  
+- https://squared2020.com/2017/09/05/introduction-to-olivers-four-factors/
+
+### 4.4 Player-impact driven models (high leverage, if data/license feasible)
+Impact metrics are better predictive building blocks than PER/WS48.
+
+References:
+- EPM: https://dunksandthrees.com/about/epm  
+- Team ratings aggregation: https://dunksandthrees.com/ratings  
+- DARKO overview: https://www.nbastuffer.com/analytics101/darko-daily-plus-minus/  
+- DARKO app: https://apanalytics.shinyapps.io/DARKO/
+
+### 4.5 Model families (Champion/Challenger, not “switch and pray”)
+**Champion (always on):** Regularized Logistic Regression  
+**Challenger:** Calibrated Gradient Boosted Trees (XGBoost/LightGBM)
+
+**Rule:** Challenger can only become champion if it wins **out-of-time** on:
+- log loss
+- Brier
+- calibration artifacts
+- stability across season segments
+
+---
+
+## 5) Probability calibration + uncertainty (make it first-class)
+
+### 5.1 Required evaluation artifacts
+Every model run produces:
+- log loss + Brier (train/val/test)
+- reliability buckets (e.g., 0.50–0.55, 0.55–0.60, …)
+- ECE/MCE summary values (or an equivalent calibration summary)
+- segment breakdown (home/away, rest tiers, favorites/dogs, early/late season)
+
+### 5.2 “Uncertainty flags” (MVP-friendly)
+In addition to a probability, output a small set of flags:
+- `DATA_STALE` (any critical feed not fresh)
+- `INJURY_UNCERTAIN` (key player status unknown at snapshot time)
+- `LINEUP_UNCONFIRMED`
+- `LOW_SIMILARITY_MATCHUPS` (optional later)
+
+These flags are product gold: they preserve trust.
+
+---
+
+## 6) Indexes (ratings) we should support and how they’re built
+
+### 6.1 EloIndex (winner-focused)
+**Inputs:** game results, home/away, optional margin  
+**Outputs:** `elo_home`, `elo_away`, `elo_diff`, `p_home_win_elo`
+
+Reference:
+- https://fivethirtyeight.com/features/how-we-calculate-nba-elo-ratings/
+
+### 6.2 SRSLikeIndex (points-focused)
 **Inputs:** points for/against, opponent schedule  
-**Output:** points-above/below-average rating and SOS components.
+**Outputs:** team rating + SOS components
 
 Reference:
 - https://www.sports-reference.com/blog/2015/03/srs-calculation-details/
 
-### 3.3 Rolling efficiency indexes (net rating / pace / four factors)
-**Inputs:** box score totals (FG, 3P, FT, TOV, ORB, possessions estimates)  
-**Output:** rolling off/def/net ratings, pace, and four factor components.
+### 6.3 RollingEfficiencyIndex (net rating / pace)
+**Inputs:** possessions estimates, points, box stats  
+**Outputs:** rolling offense/defense/net rating + pace
 
 References:
-- https://www.basketball-reference.com/about/factors.html
+- https://www.basketball-reference.com/about/factors.html  
 - https://cleaningtheglass.com/stats/guide/league_four_factors
 
-### 3.4 RosterStrengthIndex (minutes-weighted player impact)
-**Inputs:** player impact (EPM/DARKO/etc), expected minutes, injury status  
-**Output:** `team_available_strength`, `strength_diff`, plus uncertainty flags.
+### 6.4 RosterStrengthIndex (impact × minutes)
+**Inputs:** player impact, expected minutes, injury status  
+**Outputs:** `team_available_strength`, `strength_diff`, uncertainty flags
 
-EPM shows a canonical “team rating = sum(player impact × predicted minutes)” concept:
-- https://dunksandthrees.com/about/epm
+References:
+- https://dunksandthrees.com/about/epm  
 - https://dunksandthrees.com/ratings
 
 ---
 
-## 4) Feature roadmap (what to add next, and how)
+## 7) Feature roadmap (what to add next, and how)
 
-### 4.1 Non-negotiable: “As-of” feature semantics
-Every feature must be computed as-of pregame. Concretely:
-- A game at date D can only use data from games with date < D.
-- External data must be stored as **timestamped snapshots** (injuries, odds).
-
-We will implement a **Feature Audit** that records:
+### 7.1 Feature Audit (mandatory)
+Every feature must register:
 - `feature_name`
 - `source`
 - `as_of_definition`
 - `window`
 - `leakage_risk_level`
-- `unit_test` coverage status
+- `unit_test_status`
 
-### 4.2 Travel + time zone + circadian disruption (high-value, cheap)
-This is a top “mathy” add because it’s:
-- easy to compute deterministically
-- supported by published research
-- not subject to sports data licensing headaches
+**Definition of Done (DoD) for any new feature:**
+- has a written AS_OF rule
+- has an automated test that fails if it uses data with datetime `>= game_datetime`
+- is computed in a reproducible build step
 
+### 7.2 Travel + time zone + circadian disruption (high value, low dependency)
 Open research examples:
-- Travel distance/direction impacts on B2B (open access): https://pmc.ncbi.nlm.nih.gov/articles/PMC8636381/
-- Circadian change & travel distance associations (journal page): https://www.tandfonline.com/doi/abs/10.1080/07420528.2022.2113093
-- General background on air travel/circadian misalignment in elite sports: https://www.mdpi.com/2075-4663/6/3/89
+- https://pmc.ncbi.nlm.nih.gov/articles/PMC8636381/  
+- https://www.tandfonline.com/doi/abs/10.1080/07420528.2022.2113093  
+- https://www.mdpi.com/2075-4663/6/3/89  
 
 **Implementation notes**
-- Map each team to home arena coordinates + time zone.
-- For each team’s prior game, compute distance traveled and time zone shift.
-- Create schedule density features (3-in-4, 4-in-6, etc.) plus travel interactions.
+- Map team home arenas to coordinates + time zone.
+- Compute distance/time-zone shift since prior game.
+- Add schedule density (3-in-4, 4-in-6, etc.) and interactions with travel.
 
-### 4.3 Rolling per-possession form (better than raw point diff)
-Replace raw “pt diff last 10” with:
-- rolling net rating (last 5/10/20)
+### 7.3 Rolling per-possession form (replace raw point diff)
+Replace “pt diff last 10” with:
+- rolling net rating windows (5/10/20)
 - rolling pace
-- rolling four-factor components where possible
+- optionally exponential decay versions
 
-This reduces pace confounding and makes form more stable/interpretable.
-
-### 4.4 Roster availability: move from “out count” → impact-weighted strength
-Current `home_key_out_count` is too coarse.
-
+### 7.4 Roster availability: move from “out count” → magnitude-based strength
 Upgrade path:
-1) MVP: minutes-weighted “starter-level” availability using last-7-games minutes share.
-2) Next: incorporate impact metrics (EPM / DARKO / RAPM-like) and injury knowledge.
+1) MVP: minutes-share availability using last-7 games rotation weights
+2) Next: impact × minutes if impact data is feasible
+3) Later: injury report snapshots + uncertainty modeling
 
-Supporting references:
-- EPM aggregation explanation: https://dunksandthrees.com/about/epm
-- DARKO explanation: https://www.nbastuffer.com/analytics101/darko-daily-plus-minus/
-- RAPM resource (optional): https://www.nbarapm.com/
-
-### 4.5 Market prior (later phase, but architect now)
-Once odds are ingested, implement a market-prior blend:
-
-`p_final = α * p_market + (1-α) * p_model`
-
-Also compute CLV in paper mode.
-
-Data sources:
-- The Odds API: https://the-odds-api.com/
-- Markets: https://the-odds-api.com/sports-odds-data/betting-markets.html
-- v4 guide: https://the-odds-api.com/liveapi/guides/v4/
+### 7.5 Market features (bring this earlier than “later phase”)
+Once odds ingestion is available:
+- implied probabilities
+- vig removal (if needed)
+- market priors + calibration
+- CLV tracking in paper mode
 
 ---
 
-## 5) Recommended data sources (linked)
+## 8) Data sources (linked) + GOAT/OpenAPI acceleration
 
-### 5.1 Core sports data (NBA/NFL/MLB/MMA coverage)
-BALLDONTLIE docs hub:
-- https://www.balldontlie.io/docs/
+### 8.1 BALLDONTLIE (core sports data; GOAT subscription)
+Docs hub:
+- https://www.balldontlie.io/docs/  
 
-NBA API portal:
+NBA portal:
 - https://nba.balldontlie.io/
 
-Rate limiting example (shows tiered RPM):
-- https://cs.balldontlie.io/  (see “Rate Limiting” section)
+OpenAPI specification (key for AI-assisted development):
+- https://www.balldontlie.io/openapi.yml
 
-BALLDONTLIE tiers summary (official GitHub MCP server):
+Using the OpenAPI spec with AI:
+- https://nba.balldontlie.io/  (see “Using the OpenAPI Specification with AI” section)
+
+AI-assisted development guide:
+- https://www.balldontlie.io/blog/ai-assisted-development/
+
+Getting started guide:
+- https://www.balldontlie.io/blog/getting-started/
+
+Official Python SDK:
+- https://pypi.org/project/balldontlie/
+
+Official MCP server (agentic workflows):
 - https://github.com/balldontlie-api/mcp
 
-### 5.2 NBA.com endpoints (research/backfill only)
-`nba_api` (unofficial):
-- https://github.com/swar/nba_api
+### 8.2 NBA.com endpoints (optional / feature-flagged)
+Unreliable over time; keep behind feature flag:
+- https://github.com/swar/nba_api  
+- https://pypi.org/project/nba_api/
 
-**Policy:** keep behind a feature flag; never make it the only dependency.
+### 8.3 Odds / props providers (market baseline & CLV)
+- The Odds API: https://the-odds-api.com/  
+- Markets overview: https://the-odds-api.com/sports-odds-data/betting-markets.html  
+- v4 guide: https://the-odds-api.com/liveapi/guides/v4/  
+- Sportradar odds/props reference (enterprise-grade):  
+  https://developer.sportradar.com/odds/reference/oc-player-props-overview
 
-### 5.3 Odds / props providers (later phase)
-- The Odds API: https://the-odds-api.com/
-- The Odds API markets: https://the-odds-api.com/sports-odds-data/betting-markets.html
-- Sportradar player props overview (enterprise-grade reference): https://developer.sportradar.com/odds/reference/oc-player-props-overview
+### 8.4 Weather (primarily NFL, but platform-wide)
+- https://www.weather.gov/documentation/services-web-api  
+- https://weather-gov.github.io/api/general-faqs
 
-### 5.4 Weather (primarily NFL, but platform-wide)
-US National Weather Service API:
-- Overview: https://www.weather.gov/documentation/services-web-api  
-- FAQ portal: https://weather-gov.github.io/api/general-faqs
-
-**Note:** NWS requires a descriptive User-Agent header; treat it as a requirement.
-
-### 5.5 Social/news (MVP caution)
-These can easily become noisy or misleading. In MVP, treat them as:
+### 8.5 Social/news (MVP caution)
+Treat as:
 - “awareness/uncertainty” signals
-- **not** as primary predictive drivers
-- always snapshot timestamps and avoid hindsight labeling
+- snapshot + timestamp required
+- never used without strict as-of semantics
 
-(We’ll document these sources once we decide the exact channels.)
+(We will document exact channels once chosen.)
 
 ---
 
-## 6) Proposed LineLogic architecture for NBA winner modeling
+## 9) Storage + snapshot contract (upgrade from “as-of semantics” to “audit-grade”)
 
-### 6.1 Modules
+### 9.1 Snapshot record fields (required)
+For any external changing feed (odds, injuries, news, etc.):
+- `observed_at` (timestamp when we fetched it)
+- `source` and `source_version`
+- `entity_id` (game_id/team_id/player_id)
+- `raw_payload` (or stable hash + blob storage pointer)
+- `parsed_fields` (structured columns)
+- `valid_for_start` / `valid_for_end` (if applicable)
+
+### 9.2 Prediction record fields (required)
+Every prediction row should include:
+- `model_version` (git SHA)
+- `features_version` (pipeline version)
+- `feature_as_of_ts` (cutoff)
+- `prob_home_win`
+- `uncertainty_flags` (array/string)
+
+---
+
+## 10) Proposed LineLogic architecture for NBA winner modeling
+
+### 10.1 Modules
 - `linelogic/nba/datasets/`
   - `GameDatasetBuilder` (leakage-safe, as-of dataset)
   - `FeatureAuditReport`
@@ -279,127 +354,129 @@ These can easily become noisy or misleading. In MVP, treat them as:
   - `RestScheduleFeatures`
   - `TravelTimezoneFeatures`
   - `FormFeatures` (rolling net rating / pace)
+  - `MarketFeatures` (implied prob, vig, CLV hooks)  **(add this earlier)**
 - `linelogic/models/`
   - `WinProbModel` interface
-  - baseline `LogisticWinModel`
-  - optional `GBDTWinModel`
+  - Champion: `LogisticWinModel`
+  - Challenger: `GBDTWinModel` (calibrated)
+  - `Calibrator` (Platt/isotonic)
 - `linelogic/eval/`
-  - log loss, Brier, calibration buckets
   - time-split evaluation
+  - log loss, Brier
+  - calibration artifacts (buckets + ECE/MCE)
+  - stability/segment reports
 - `linelogic/storage/`
-  - snapshots + model versions
+  - snapshots + model runs + predictions
+  - reproducibility manifests
 
-### 6.2 Data contract (tables / artifacts)
-Store everything with timestamps and source metadata.
-
-Minimum tables (SQLite for POC):
-- `games_raw` (ingested schedule/results, with `pulled_at`)
+### 10.2 Data contract (POC storage; SQLite is fine)
+Minimum tables:
+- `games_raw` (schedule/results, with `pulled_at`)
+- `snapshots_external` (odds/injuries/news snapshots; generic table or per-source)
 - `features_game` (one row per game, with `feature_as_of_ts`)
-- `indexes_team_daily` (team ratings per date)
-- `model_runs` (config + git sha + model version)
-- `predictions` (game_id, predicted prob, timestamp, model_version)
+- `indexes_team_daily` (Elo/SRS/efficiency, per team per date)
+- `model_runs` (config + git SHA + versions)
+- `predictions` (game_id, prob, timestamps, model_version)
+- `paper_bets` (paper portfolio)  **(add early)**
 
 ---
 
-## 7) Implementation plan (milestones)
+## 11) Implementation plan (milestones)
 
-### Milestone M0 — Make the pipeline provably leakage-safe
-**Goal:** We trust the evaluation numbers.
+### Milestone M0 — Leak-proof and reproducible
+**Goal:** We trust evaluation numbers.
 
 Deliverables:
-1) Implement **time-based splits** (season-forward or rolling-origin).
-2) Add `FeatureAuditReport` and a test suite that fails if any feature uses future data.
-3) Rebuild any season-level metrics to be **as-of date**.
+1) Season-forward / forward-chaining split utilities
+2) `FeatureAuditReport` + tests that fail on any `datetime >= game_datetime`
+3) Rebuild any season-level advanced metrics to be as-of (or replace with priors)
 
 Exit criteria:
-- Unit tests prove no “date >= game_date” data is used.
-- Performance may drop; we accept that.
+- “Leakage test suite” passes
+- Reproducible build from raw sources to dataset to predictions
 
-### Milestone M1 — Index backbone: Elo + rolling efficiency + travel
-**Goal:** Strong interpretable baseline with explainable shifts.
+---
+
+### Milestone M1 — Benchmarks + paper validation loop (move this earlier)
+**Goal:** Build the loop that makes LineLogic trustworthy.
 
 Deliverables:
-- `EloIndexBuilder` with 538-style MOV multiplier
-- `RollingEfficiencyBuilder` (net rating, pace)
+- Elo-only baseline
+- (If odds available) market implied baseline
+- paper portfolio schema + logging UX
+- calibration artifacts produced automatically
+
+Exit criteria:
+- We can run “today’s slate” in paper mode and store predictions + snapshots + bets
+- We can report calibration buckets and baseline comparisons
+
+---
+
+### Milestone M2 — Index backbone + travel + efficiency features
+**Goal:** Strong interpretable signals with explainable shifts.
+
+Deliverables:
+- `EloIndexBuilder` (538-inspired)
+- `RollingEfficiencyBuilder` (net rating / pace windows)
 - `TravelTimezoneFeatures`
-- Evaluation report: log loss, Brier, calibration plot data
 
 Exit criteria:
-- Elo-only baseline runs end-to-end and produces sane probabilities.
-- Added features improve log loss out-of-sample.
+- Out-of-time improvement vs Elo-only
+- Stable calibration; no weird probability spikes
 
-### Milestone M2 — Roster strength (impact × minutes)
-**Goal:** Convert injuries/availability into magnitude, not counts.
+---
+
+### Milestone M3 — Roster strength and uncertainty modeling
+**Goal:** Convert “injury info” into magnitude and confidence.
 
 Deliverables:
-- `RosterStrengthBuilder` using minutes-based rotation estimates
-- Optional impact metric ingestion (EPM/DARKO) if feasible from licensing/data availability
-- “uncertainty flags” for questionable/unknown availability
+- minutes-share availability MVP
+- impact × minutes (if feasible)
+- uncertainty flags for questionable/unknown data
 
 Exit criteria:
-- Measurable gain in calibration and/or log loss.
+- incremental improvement and better explanations (not just score)
 
-### Milestone M3 — Market prior + CLV (paper mode)
-**Goal:** Treat the market as the strongest baseline; measure skill via CLV.
+---
+
+### Milestone M4 — Market priors + CLV (if not already in M1)
+**Goal:** Measure skill against the market, not just outcomes.
 
 Deliverables:
-- Odds ingestion (timestamped)
-- Vig removal + implied probability baseline
-- Market-prior blend + calibration
+- odds ingestion snapshots
+- vig handling
+- market prior blend
 - CLV tracking in paper mode
 
 Exit criteria:
-- Stable calibration and positive CLV trend over a meaningful sample.
+- stable calibration + positive CLV trend (over a meaningful sample)
 
 ---
 
-## 8) Detailed new feature specs (build notes)
+## 12) Detailed new feature specs (build notes)
 
-### 8.1 TravelTimezoneFeatures
-**Inputs:**
-- team home city coordinates + timezone
-- game schedule with tipoff times and locations
-
-**Outputs:**
-- `home_travel_km`, `away_travel_km` (since last game)
-- `home_tz_shift`, `away_tz_shift`
-- `home_eastward_shift_flag`, `away_eastward_shift_flag`
-- interactions with B2B / 3-in-4
+### 12.1 TravelTimezoneFeatures
+**Inputs:** team home arena coords + time zone, schedule w/ tipoff times  
+**Outputs:** travel_km, tz_shift, eastward_flag, schedule density + interactions
 
 Research:
 - https://pmc.ncbi.nlm.nih.gov/articles/PMC8636381/
 - https://www.tandfonline.com/doi/abs/10.1080/07420528.2022.2113093
 
-### 8.2 EloIndexBuilder
-Use FiveThirtyEight’s published MOV multiplier as a reference implementation:
-- https://fivethirtyeight.com/features/how-we-calculate-nba-elo-ratings/
-
-Deliver:
-- daily team ratings
-- `p_home_win_elo`
-
-### 8.3 RollingEfficiencyBuilder
+### 12.2 RollingEfficiencyBuilder
 Compute rolling:
 - possessions estimate
 - off/def/net rating
 - pace
+- windows: 5/10/20 + optional exponential decay
 
-Then build:
-- last 5/10/20 windows
-- exponentially-weighted variants (optional)
-
-Four factors reference pages:
+References:
 - https://www.basketball-reference.com/about/factors.html
 - https://cleaningtheglass.com/stats/guide/league_four_factors
 
-### 8.4 RosterStrengthBuilder (M2)
-**MVP version:**
-- Use last-7 games minutes share as expected rotation weights
-- If player is out, remove their share and renormalize
-
-**Upgraded version:**
-- Multiply expected minutes shares by player impact metrics (EPM/DARKO)
-- Aggregate to team strength
+### 12.3 RosterStrengthBuilder (MVP → upgraded)
+**MVP:** last-7 games minutes shares, remove unavailable players, renormalize  
+**Upgraded:** multiply minutes shares by impact metrics (EPM/DARKO), aggregate
 
 References:
 - https://dunksandthrees.com/about/epm
@@ -409,34 +486,37 @@ References:
 
 ---
 
-## 9) “Next 10 tasks” backlog (copy into issues)
+## 13) “Next 12 tasks” backlog (copy into issues)
 
-1. Implement time-based train/val/test split utilities (season-forward + rolling-origin)
-2. Implement `FeatureAuditReport` (metadata + leakage checks)
-3. Rebuild advanced metrics as-of date OR replace with prior-season priors
-4. Implement `EloIndexBuilder` (538-style MOV multiplier)
-5. Implement rolling efficiency features (net rating/pace windows)
-6. Implement travel/timezone feature builder
-7. Add calibration buckets + reliability reporting artifacts
-8. Add model card doc (assumptions, failure modes, monitoring metrics)
-9. Implement roster strength MVP (minutes-share availability)
-10. Decide odds ingestion provider and design the schema for timestamped odds snapshots
+1) Implement forward-chaining split utilities (season-forward + rolling-origin)
+2) Implement Feature Audit registry + leakage unit tests
+3) Convert any season-level advanced metric into as-of computation or priors
+4) Implement EloIndexBuilder baseline
+5) Add evaluation artifacts: log loss, Brier, calibration buckets, ECE/MCE summary
+6) Create snapshot store schema (odds/injuries/news) with `observed_at`
+7) Add paper portfolio schema + “log paper bet” workflow
+8) Add travel/timezone feature builder
+9) Add rolling efficiency features (net rating / pace windows)
+10) Implement Champion logistic + Challenger calibrated GBDT scaffolding
+11) Add market implied probability baseline (if odds ingested)
+12) Build “model card” output for each model run (assumptions, limits, versions)
 
 ---
 
-## 10) Appendix — POC context (what we keep, what we change)
+## 14) Appendix — What we keep vs change immediately
 
 ### Keep
 - Log loss + Brier as primary metrics
-- Regularization + collinearity pruning (good practice)
-- Elo + rest + recent form as a baseline feature family
+- Elo + rest + recent form as baseline signals
+- Feature pruning and regularization discipline
 
 ### Change immediately
-- Enforce “as-of” and time-based splits
-- Remove or rebuild any feature that can’t be proven pregame-known
-- Replace coarse injury counts with magnitude-based roster strength (when possible)
+- Enforce forward-chaining splits (no random stratified for headline results)
+- Enforce snapshotting and as-of semantics for anything time-varying
+- Replace coarse injury counts with magnitude-based roster strength (when feasible)
+- Add market baselines and paper validation loop early
 
 ---
 
-**If you want, I can also generate a second markdown file:**
-`docs/08_leakage_audit_checklist.md` with concrete unit tests (e.g., “no feature window end >= game_date”) and an automated dataset validator.
+**Optional companion doc (recommended next):**
+`docs/08_leakage_audit_checklist.md` — concrete unit tests, feature DoD checklist, and a dataset validator that fails the build when any as-of rule is violated.

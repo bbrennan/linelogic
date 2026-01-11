@@ -9,6 +9,8 @@ on:
 jobs:
     validate-ingest:
         runs-on: ubuntu-latest
+        env:
+            BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -24,7 +26,8 @@ jobs:
                   python -m pip install --upgrade pip
                   pip install -e .
 
-            - name: Ingest current teams
+            - name: Ingest current teams (live)
+              if: ${{ env.BALLDONTLIE_API_KEY != '' }}
               run: |
                   python - << 'PY'
                   from linelogic.ingest.pipeline import IngestPipeline
@@ -37,7 +40,38 @@ jobs:
                     raise SystemExit('Current teams ingest failed')
                   PY
 
-            - name: Ingest daily games (today)
+            - name: Ingest current teams (offline fixture)
+              if: ${{ env.BALLDONTLIE_API_KEY == '' }}
+              run: |
+                  python - << 'PY'
+                  import json
+                  from linelogic.ingest.pipeline import IngestPipeline
+
+                  p = IngestPipeline()
+
+                  # Monkeypatch provider to avoid external API calls in CI.
+                  p.api.get_current_teams = lambda: [
+                      {
+                          "id": i,
+                          "name": f"Team{i}",
+                          "full_name": f"Full Team {i}",
+                          "abbreviation": f"T{i:02d}",
+                          "city": f"City{i}",
+                          "conference": "East" if i % 2 == 0 else "West",
+                          "division": None,
+                      }
+                      for i in range(1, 31)
+                  ]
+
+                  mp = p.ingest_current_teams()
+                  d = json.loads(open(mp).read())
+                  print(d)
+                  if d["count"] != 30 or d["errors"]:
+                      raise SystemExit("Current teams ingest failed")
+                  PY
+
+            - name: Ingest daily games (today, live)
+              if: ${{ env.BALLDONTLIE_API_KEY != '' }}
               run: |
                   python - << 'PY'
                   from datetime import datetime
@@ -50,6 +84,46 @@ jobs:
                   print(d)
                   if d['errors']:
                     raise SystemExit('Daily games ingest validation errors')
+                  PY
+
+            - name: Ingest daily games (offline fixture)
+              if: ${{ env.BALLDONTLIE_API_KEY == '' }}
+              run: |
+                  python - << 'PY'
+                  import json
+                  from datetime import datetime
+                  from linelogic.ingest.pipeline import IngestPipeline
+
+                  p = IngestPipeline()
+                  date_str = datetime.utcnow().strftime('%Y-%m-%d')
+
+                  # Monkeypatch provider to avoid external API calls in CI.
+                  p.api.get_games = lambda date: [
+                      {
+                          "id": 1,
+                          "date": f"{date}T19:00:00",
+                          "home_team": {"id": 1, "name": "Team1", "abbreviation": "T01"},
+                          "away_team": {"id": 2, "name": "Team2", "abbreviation": "T02"},
+                          "status": "scheduled",
+                          "home_score": None,
+                          "away_score": None,
+                      },
+                      {
+                          "id": 2,
+                          "date": f"{date}T21:30:00",
+                          "home_team": {"id": 3, "name": "Team3", "abbreviation": "T03"},
+                          "away_team": {"id": 4, "name": "Team4", "abbreviation": "T04"},
+                          "status": "scheduled",
+                          "home_score": None,
+                          "away_score": None,
+                      },
+                  ]
+
+                  mp = p.ingest_daily_games(date_str)
+                  d = json.loads(open(mp).read())
+                  print(d)
+                  if d["errors"]:
+                      raise SystemExit("Daily games ingest validation errors")
                   PY
 
     test:

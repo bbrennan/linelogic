@@ -8,11 +8,16 @@ Commands:
 - report: Generate performance report (future)
 """
 
+import os
+
 import click
 
 from linelogic.config.settings import settings
 from linelogic.logging_config import logger  # noqa: F401 initializes logging
 from linelogic.storage.sqlite import init_db
+
+
+DEFAULT_TO_EMAIL = os.getenv("TO_EMAIL", "")
 
 
 @click.group()
@@ -68,7 +73,8 @@ def check() -> None:
     click.echo("\nNext steps:")
     click.echo("  1. Run tests: make test")
     click.echo(
-        "  2. Generate recommendations: linelogic recommend --sport nba (coming soon)"
+        "  2. Generate recommendations: linelogic recommend --sport nba "
+        "(coming soon)"
     )
     click.echo("  3. View docs: docs/")
 
@@ -76,7 +82,9 @@ def check() -> None:
 @main.command("recommend-daily")
 @click.option("--date", required=True, help="Date in YYYY-MM-DD format")
 @click.option(
-    "--email", default="bbrennan83@gmail.com", help="Email to send summary to"
+    "--email",
+    default=DEFAULT_TO_EMAIL,
+    help="Email to send summary to (default: TO_EMAIL env var)",
 )
 @click.option("--no-email", is_flag=True, help="Skip email sending")
 def recommend_daily(date: str, email: str, no_email: bool) -> None:
@@ -112,7 +120,7 @@ def recommend_daily(date: str, email: str, no_email: bool) -> None:
         click.echo("\n✅ Recommendations saved to database")
 
         # Send email summary if requested
-        if not no_email and result["count"] > 0:
+        if not no_email and email and result["count"] > 0:
             try:
                 from linelogic.eval.summary import SummaryGenerator
                 from linelogic.email_router import get_email_sender
@@ -129,11 +137,13 @@ def recommend_daily(date: str, email: str, no_email: bool) -> None:
                 ):
                     click.echo(f"📧 Summary emailed to {email}")
                 else:
-                    click.echo(f"⚠️  Email send failed")
+                    click.echo("⚠️  Email send failed")
             except ValueError as exc:
                 click.echo(f"⚠️  Email skipped: {exc}")
             except Exception as exc:
                 click.echo(f"⚠️  Email error: {exc}")
+        elif not no_email and not email:
+            click.echo("⚠️  Email skipped: set TO_EMAIL or pass --email")
 
     except ValueError as exc:
         click.echo(f"❌ Error: {exc}")
@@ -144,12 +154,16 @@ def recommend_daily(date: str, email: str, no_email: bool) -> None:
 @main.command("settle-daily")
 @click.option("--date", required=True, help="Date in YYYY-MM-DD format")
 @click.option(
-    "--email", default="bbrennan83@gmail.com", help="Email to send summary to"
+    "--email",
+    default=DEFAULT_TO_EMAIL,
+    help="Email to send summary to (default: TO_EMAIL env var)",
 )
 @click.option("--no-email", is_flag=True, help="Skip email sending")
 def settle_daily(date: str, email: str, no_email: bool) -> None:
     """
-    Settle recommendations for a date (stub: ingest results, compute ROI/Kelly).
+    Settle recommendations for a date.
+
+    Stub: ingest results, compute ROI/Kelly.
 
     This is a placeholder; integrate real sportsbook result feeds in v2+.
     Optionally sends HTML email summary with settlement results and bankroll.
@@ -168,7 +182,7 @@ def settle_daily(date: str, email: str, no_email: bool) -> None:
         click.echo("\n✅ Results saved to database")
 
         # Send email summary if requested
-        if not no_email and result["settled_count"] > 0:
+        if not no_email and email and result["settled_count"] > 0:
             try:
                 from linelogic.eval.summary import SummaryGenerator
                 from linelogic.email_router import get_email_sender
@@ -190,11 +204,13 @@ def settle_daily(date: str, email: str, no_email: bool) -> None:
                 ):
                     click.echo(f"📧 Summary emailed to {email}")
                 else:
-                    click.echo(f"⚠️  Email send failed")
+                    click.echo("⚠️  Email send failed")
             except ValueError as exc:
                 click.echo(f"⚠️  Email skipped: {exc}")
             except Exception as exc:
                 click.echo(f"⚠️  Email error: {exc}")
+        elif not no_email and not email:
+            click.echo("⚠️  Email skipped: set TO_EMAIL or pass --email")
     except Exception as exc:
         click.echo(f"❌ Error: {exc}")
 
@@ -215,10 +231,14 @@ def recommend(sport: str, date: str | None) -> None:
 
 @main.command("weekly-summary")
 @click.option(
-    "--date", required=True, help="End date in YYYY-MM-DD format (typically today)"
+    "--date",
+    required=True,
+    help="End date in YYYY-MM-DD format (typically today)",
 )
 @click.option(
-    "--email", default="bbrennan83@gmail.com", help="Email to send summary to"
+    "--email",
+    default=DEFAULT_TO_EMAIL,
+    help="Email to send summary to (default: TO_EMAIL env var)",
 )
 @click.option("--no-email", is_flag=True, help="Skip email sending")
 def weekly_summary(date: str, email: str, no_email: bool) -> None:
@@ -254,23 +274,29 @@ def weekly_summary(date: str, email: str, no_email: bool) -> None:
         click.echo("✅ Report generated")
 
         # Send email if requested
-        if not no_email:
+        if not no_email and email:
             try:
                 from linelogic.email_router import get_email_sender
 
                 sender = get_email_sender()
+                subject = (
+                    "LineLogic Weekly Analysis - Week of "
+                    f"{start_date.strftime('%Y-%m-%d')}"
+                )
                 if sender.send_email(
                     to_email=email,
-                    subject=f"LineLogic Weekly Analysis - Week of {start_date.strftime('%Y-%m-%d')}",
+                    subject=subject,
                     html_content=html_report,
                 ):
                     click.echo(f"📧 Report emailed to {email}")
                 else:
-                    click.echo(f"⚠️  Email send failed")
+                    click.echo("⚠️  Email send failed")
             except ValueError as exc:
                 click.echo(f"⚠️  Email skipped: {exc}")
             except Exception as exc:
                 click.echo(f"⚠️  Email error: {exc}")
+        elif not no_email and not email:
+            click.echo("⚠️  Email skipped: set TO_EMAIL or pass --email")
 
         click.echo("=" * 50)
         click.echo("\nKey sections in email:")

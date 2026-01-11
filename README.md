@@ -84,16 +84,16 @@ LOG_LEVEL=DEBUG linelogic recommend-daily --date 2026-01-15  # verbose logging
 LineLogic can run automatically every day without manual intervention:
 
 - **Local (LaunchAgent)**: 9 AM daily on your Mac (laptop must be on)
-  - [Setup Guide](docs/10_daily_scheduler.md)
+  - [Setup Guide](docs/specs/setup/10_daily_scheduler.md)
   - Commands: `./scripts/linelogic-job.sh {start|stop|restart|status|logs|unload}`
 
 - **Cloud (GitHub Actions)**: 9 AM UTC daily on GitHub servers (24/7, no laptop required)
-  - [Setup Guide](docs/11_github_actions_scheduler.md)
+  - [Setup Guide](docs/specs/setup/11_github_actions_scheduler.md)
   - Requires: BALLDONTLIE_API_KEY, ODDS_API_KEY secrets
 
 - **Email Notifications**: Daily summaries with bankroll tracking and results
   - Requires: SendGrid free account (100 emails/day, sufficient for daily reports)
-  - [Setup Guide](docs/12_email_setup.md)
+  - [Setup Guide](docs/specs/setup/12_email_setup.md)
   - Shows: Current bankroll, picks with edges, settlement outcomes and P&L
 
 ## Repository Structure
@@ -113,7 +113,9 @@ linelogic/
 │   └── app/                # CLI and future Streamlit UI
 ├── tests/                  # Unit and integration tests
 ├── docs/                   # Comprehensive documentation
-├── adr/                    # Architecture Decision Records
+├── docs/decisions/         # Architecture Decision Records (ADRs)
+├── app/                    # Streamlit app
+├── assets/                 # Images, logos
 ├── Makefile                # Development commands
 ├── pyproject.toml          # Project config and dependencies
 └── .env.example            # Environment template
@@ -123,7 +125,7 @@ linelogic/
 
 ### Sports Stats (Primary: NBA)
 
--**BALLDONTLIE** (free + paid tiers): ✅ Legal, compliant, primary NBA source
+- **BALLDONTLIE** (free + paid tiers): ✅ Legal, compliant, primary NBA source
   - Free tier: 5 req/min, players/teams/games
   - All-Star ($5/mo): 30 req/min, player stats (required for M1)
   - Tier gating: paid endpoints raise `PaidTierRequiredError`
@@ -133,14 +135,14 @@ linelogic/
 
 ### Future Integrations
 
--Odds: The Odds API ($20/mo for M1)
+- Odds: The Odds API ($20/mo for M1)
 - Weather: WeatherAPI (free, M2 for outdoor sports)
 - Injuries: Manual checks (M0/M1), licensed feeds (M2+)
 - Social/News: Twitter API, NewsAPI (M3)
 - Licensed providers: Sportradar, Genius Sports (M4, $3k+/mo)
 
-See [docs/04_data_sources.md](docs/04_data_sources.md) for details.
-+
+See [docs/specs/data/04_data_sources.md](docs/specs/data/04_data_sources.md) for details.
+
 **⚠️ Legal Compliance:** nba_api removed due to NBA.com ToS violations. LineLogic uses only legally compliant data sources.
 
 ## Key Concepts
@@ -189,7 +191,7 @@ make type-check  # Type check with mypy
 2. Add tier gating and error handling
 3. Use cache and rate limiter
 4. Write mocked integration tests
-5. Update [docs/04_data_sources.md](docs/04_data_sources.md)
+5. Update [docs/specs/data/04_data_sources.md](docs/specs/data/04_data_sources.md)
 
 ### Running Pre-commit Hooks
 
@@ -199,18 +201,20 @@ pre-commit run --all-files
 
 ## Documentation
 
-Comprehensive docs in `docs/`:
+Comprehensive docs are indexed in [docs/README.md](docs/README.md).
 
-1. [Vision and Goals](docs/01_vision.md)
-2. [Sports Strategy](docs/02_sports_strategy.md) (NBA, NFL, MLB, MMA)
-3. [Math Foundations](docs/03_math_foundations.md) (odds, EV, Kelly, Sharpe)
-4. [Data Sources](docs/04_data_sources.md) (providers, APIs, tiers)
-5. [Backtesting and Paper Trading](docs/05_backtesting_and_paper_trading.md)
-6. [Risks and Compliance](docs/06_risks_and_compliance.md)
+Key entries:
 
-Architecture decisions in `adr/`:
+1. [Vision and Goals](docs/research/01_vision.md)
+2. [Sports Strategy](docs/research/02_sports_strategy.md)
+3. [Math Foundations](docs/research/03_math_foundations.md)
+4. [Data Sources](docs/specs/data/04_data_sources.md)
+5. [Backtesting and Paper Trading](docs/specs/backtesting/05_backtesting_and_paper_trading.md)
+6. [Risks and Compliance](docs/specs/compliance/06_risks_and_compliance.md)
 
-- [ADR 0001: Architecture](adr/0001_architecture.md)
+Architecture decisions (ADRs):
+
+- [ADR 0001: Architecture](docs/decisions/0001_architecture.md)
 
 ## Roadmap
 

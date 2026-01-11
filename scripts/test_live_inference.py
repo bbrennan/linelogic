@@ -273,7 +273,9 @@ def main():
     print(
         "\n📋 Tomorrow at 9 AM UTC, this script will run automatically via GitHub Actions"
     )
-    print("   and send daily predictions via email to bbrennan83@gmail.com\n")
+    print(
+        "   and send daily predictions via email to the configured TO_EMAIL recipient\n"
+    )
 
 
 if __name__ == "__main__":

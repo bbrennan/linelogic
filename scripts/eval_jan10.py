@@ -128,7 +128,7 @@ def generate_report():
     print(f"\n🚀 DEPLOYMENT READY:")
     print(f"   Tomorrow (Jan 11) at 9 AM UTC")
     print(f"   - Predictions will auto-generate")
-    print(f"   - Email will auto-send to bbrennan83@gmail.com")
+    print(f"   - Email will auto-send to the configured TO_EMAIL recipient")
     print(f"   - GitHub will auto-commit results")
     print(f"   - Zero manual intervention")
 

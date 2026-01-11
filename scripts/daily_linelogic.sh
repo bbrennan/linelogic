@@ -9,6 +9,9 @@ LINELOGIC_HOME="/Users/bbrennan/Desktop/LineLogic"
 LOG_DIR="${LINELOGIC_HOME}/.linelogic"
 SCRIPT_LOG="${LOG_DIR}/daily_job.log"
 
+# Optional recipient; if unset, CLI will skip sending.
+TO_EMAIL="${TO_EMAIL:-}"
+
 # Ensure log directory exists
 mkdir -p "$LOG_DIR"
 
@@ -27,8 +30,15 @@ cd "$LINELOGIC_HOME"
 log "=== Starting daily LineLogic job ==="
 
 # Run recommend-daily for today
-log "Running: linelogic recommend-daily --date $TODAY --email bbrennan83@gmail.com"
-if .venv/bin/python -m linelogic.app.cli recommend-daily --date "$TODAY" --email bbrennan83@gmail.com >> "$SCRIPT_LOG" 2>&1; then
+if [[ -n "$TO_EMAIL" ]]; then
+    log "Running: linelogic recommend-daily --date $TODAY --email $TO_EMAIL"
+    RECOMMEND_ARGS=(recommend-daily --date "$TODAY" --email "$TO_EMAIL")
+else
+    log "Running: linelogic recommend-daily --date $TODAY --no-email (TO_EMAIL not set)"
+    RECOMMEND_ARGS=(recommend-daily --date "$TODAY" --no-email)
+fi
+
+if .venv/bin/python -m linelogic.app.cli "${RECOMMEND_ARGS[@]}" >> "$SCRIPT_LOG" 2>&1; then
     log "✅ recommend-daily succeeded"
 else
     log "❌ recommend-daily failed"
@@ -38,8 +48,15 @@ fi
 sleep 2
 
 # Run settle-daily for yesterday (to settle completed games)
-log "Running: linelogic settle-daily --date $YESTERDAY --email bbrennan83@gmail.com"
-if .venv/bin/python -m linelogic.app.cli settle-daily --date "$YESTERDAY" --email bbrennan83@gmail.com >> "$SCRIPT_LOG" 2>&1; then
+if [[ -n "$TO_EMAIL" ]]; then
+    log "Running: linelogic settle-daily --date $YESTERDAY --email $TO_EMAIL"
+    SETTLE_ARGS=(settle-daily --date "$YESTERDAY" --email "$TO_EMAIL")
+else
+    log "Running: linelogic settle-daily --date $YESTERDAY --no-email (TO_EMAIL not set)"
+    SETTLE_ARGS=(settle-daily --date "$YESTERDAY" --no-email)
+fi
+
+if .venv/bin/python -m linelogic.app.cli "${SETTLE_ARGS[@]}" >> "$SCRIPT_LOG" 2>&1; then
     log "✅ settle-daily succeeded"
 else
     log "❌ settle-daily failed"

@@ -183,7 +183,9 @@ def main():
     print(
         f"\n📋 Tomorrow at 9 AM UTC, this pipeline will run automatically via GitHub Actions"
     )
-    print(f"   Daily predictions will be emailed to bbrennan83@gmail.com\n")
+    print(
+        f"   Daily predictions will be emailed to the configured TO_EMAIL recipient\n"
+    )
 
     # Create summary CSV for inspection
     df_results = pd.DataFrame(results)

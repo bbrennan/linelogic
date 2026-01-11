@@ -28,6 +28,12 @@ repos:
 
   - repo: local
     hooks:
+      - id: root-markdown-guard
+        name: disallow root markdown files
+        entry: python scripts/check_root_markdown.py
+        language: system
+        pass_filenames: false
+
       - id: pytest
         name: pytest
         entry: python -m pytest

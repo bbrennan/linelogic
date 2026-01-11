@@ -440,37 +440,14 @@ def get_recent_picks(limit=15):
     """Fetch recent recommendations with enhanced display."""
     conn = get_connection()
 
-    primary_query = f"""
+    query = f"""
         SELECT 
             r.created_at,
-            r.market,
+            COALESCE(r.market, 'ML') as market,
             r.selection,
             ROUND(r.model_prob * 100, 1) as model_prob_pct,
             ROUND(r.market_prob * 100, 1) as market_prob_pct,
             ROUND(r.edge * 100, 2) as edge_pct,
-            r.confidence_tier,
-            r.stake_suggested as stake,
-            CASE
-                WHEN res.outcome_win_bool = 1 THEN '✅ Win'
-                WHEN res.outcome_win_bool = 0 THEN '❌ Loss'
-                ELSE '⏳ Pending'
-            END as result,
-            COALESCE(ROUND(res.profit_loss, 2), 0) as pnl
-        FROM recommendations r
-        LEFT JOIN results res ON r.id = res.recommendation_id
-        ORDER BY r.created_at DESC
-        LIMIT {limit}
-    """
-
-    fallback_query = f"""
-        SELECT 
-            r.created_at,
-            'ML' as market,
-            r.selection,
-            ROUND(r.model_prob * 100, 1) as model_prob_pct,
-            ROUND(r.market_prob * 100, 1) as market_prob_pct,
-            ROUND(r.edge * 100, 2) as edge_pct,
-            r.confidence_tier,
             r.stake_suggested as stake,
             CASE
                 WHEN res.outcome_win_bool = 1 THEN '✅ Win'
@@ -485,11 +462,14 @@ def get_recent_picks(limit=15):
     """
 
     try:
-        return pd.read_sql_query(primary_query, conn)
-    except Exception:
-        # Fallback for older databases without the `market` column; default to moneyline
-        st.warning("Database missing `market` column; defaulting market to 'ML'.")
-        return pd.read_sql_query(fallback_query, conn)
+        df = pd.read_sql_query(query, conn)
+        if len(df) == 0:
+            # Return empty dataframe with correct columns
+            return pd.DataFrame(columns=['created_at', 'market', 'selection', 'model_prob_pct', 'market_prob_pct', 'edge_pct', 'stake', 'result', 'pnl'])
+        return df
+    except Exception as e:
+        st.error(f"Database query error: {e}")
+        return pd.DataFrame(columns=['created_at', 'market', 'selection', 'model_prob_pct', 'market_prob_pct', 'edge_pct', 'stake', 'result', 'pnl'])
 
 
 def format_delta(value, prefix="", suffix=""):
@@ -503,11 +483,25 @@ def format_delta(value, prefix="", suffix=""):
 
 
 # ===== HEADER =====
-st.markdown(
-    """
-    <div class="linelogic-header">
-        <div class="linelogic-logo">📊 LINELOGIC</div>
-    </div>
+if Path("linelogic_logo.png").exists():
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        st.image("linelogic_logo.png", width=120)
+    with col2:
+        st.markdown(
+            """
+            <div class="linelogic-header">
+                <div class="linelogic-logo">LINELOGIC</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+else:
+    st.markdown(
+        """
+        <div class="linelogic-header">
+            <div class="linelogic-logo">📊 LINELOGIC</div>
+        </div>
     <div class="linelogic-tagline">
         Quantitative Sports Betting Intelligence — Model-Driven Recommendations with CLV Tracking
     </div>

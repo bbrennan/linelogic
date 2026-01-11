@@ -305,31 +305,18 @@ class DailyInferenceEngine:
             else pd.DataFrame()
         )
 
-        # Filter to most recent season available
+        # Filter cached team avgs to latest season available (used only if live stats are unavailable)
+        latest_season = None
         if not team_avgs_df.empty and "season" in team_avgs_df.columns:
-            latest_season = team_avgs_df["season"].max()
+            latest_season = int(team_avgs_df["season"].max())
             team_avgs_df = team_avgs_df[team_avgs_df["season"] == latest_season]
-            if self.verbose:
-                print(
-                    f"⚠️  WARNING: Using cached {latest_season} season data (current season: {current_season})"
-                )
-                print(
-                    f"   For production, fetch live {current_season} stats from balldontlie API!"
-                )
 
         if self.verbose and not team_avgs_df.empty:
             print(f"Loaded team avgs: {len(team_avgs_df)} rows")
             print(f"Loaded advanced metrics: {len(adv_metrics_df)} rows")
             print(f"Loaded player stats: {len(player_stats_df)} rows")
 
-        # Initialize feature engineer with all cached data
-        engineer = FeatureEngineer(
-            advanced_metrics_df=adv_metrics_df,
-            player_stats_df=player_stats_df,
-            team_avgs_df=team_avgs_df,
-            injuries_df=injuries_df,
-            odds_df=odds_df,
-        )
+        # Defer FeatureEngineer init until after live stats attempt
 
         # Fetch games for this date from BALLDONTLIE
         if self.verbose:
@@ -350,7 +337,7 @@ class DailyInferenceEngine:
                 print(f"No games found for {date.date()}")
             return pd.DataFrame()
 
-        # Convert to dataframe - extract team abbreviations from nested dicts
+        # Convert to dataframe - extract team abbreviations and ids from nested dicts
         games_data = []
         for game in games:
             games_data.append(
@@ -359,6 +346,8 @@ class DailyInferenceEngine:
                     "date": game["date"],
                     "home_team": game["home_team"]["abbreviation"],
                     "away_team": game["away_team"]["abbreviation"],
+                    "home_team_id": game["home_team"]["id"],
+                    "away_team_id": game["away_team"]["id"],
                     "status": game["status"],
                     # Add dummy values for feature engineering (not yet played)
                     "home_score": None,
@@ -393,6 +382,95 @@ class DailyInferenceEngine:
         )
         games_df["rest_bucket"] = games_df["home_rest_days"].apply(self.bucket_rest)
         games_df["season"] = games_df["date"].dt.year
+
+        # Compute live team stats for teams playing today (prefer over cache)
+        team_ids = set(games_df["home_team_id"].tolist() + games_df["away_team_id"].tolist())
+        if self.verbose:
+            print(f"Computing live team stats for {len(team_ids)} teams...")
+
+        api = BalldontlieProvider()
+
+        def _compute_live_team_stats(season: int, api: BalldontlieProvider, team_ids: set[int]) -> pd.DataFrame:
+            current_teams = {t["id"]: t["full_name"] for t in api.get_current_teams()}
+            records = []
+            for tid in team_ids:
+                try:
+                    games = api.get_team_games(tid, season)
+                    finals = [g for g in games if g.get("status") == "Final" and g.get("home_score") is not None and g.get("away_score") is not None]
+                    if not finals:
+                        records.append({
+                            "season": season,
+                            "team": current_teams.get(tid, ""),
+                            "win_pct": 0.5,
+                            "net_rating": 0.0,
+                            "pace": 100.0,
+                            "off_rating": 110.0,
+                            "def_rating": 110.0,
+                            "off_3pa_rate": 0.38,
+                            "def_opp_3pa_rate": 0.38,
+                        })
+                        continue
+                    wins = 0
+                    diffs = []
+                    pf = []
+                    pa = []
+                    for g in finals:
+                        is_home = g["home_team"]["id"] == tid
+                        team_pts = g["home_score"] if is_home else g["away_score"]
+                        opp_pts = g["away_score"] if is_home else g["home_score"]
+                        if team_pts > opp_pts:
+                            wins += 1
+                        diffs.append(team_pts - opp_pts)
+                        pf.append(team_pts)
+                        pa.append(opp_pts)
+                    gp = len(finals)
+
+                    # Optional paid-tier: compute team 3PA rate from player stats
+                    off_3pa_rate = 0.38
+                    try:
+                        per_game = api.get_team_season_game_stats(tid, season)
+                        ratios = [v["fg3a"] / v["fga"] for v in per_game.values() if v.get("fga", 0) > 0]
+                        if ratios:
+                            off_3pa_rate = round(float(np.mean(ratios)), 4)
+                    except Exception:
+                        pass
+
+                    records.append({
+                        "season": season,
+                        "team": current_teams.get(tid, ""),
+                        "win_pct": round(wins / gp, 4) if gp > 0 else 0.5,
+                        "net_rating": round(float(np.mean(diffs)) if diffs else 0.0, 2),
+                        "pace": 100.0,
+                        "off_rating": round(float(np.mean(pf)) if pf else 110.0, 2),
+                        "def_rating": round(float(np.mean(pa)) if pa else 110.0, 2),
+                        "off_3pa_rate": off_3pa_rate,
+                        "def_opp_3pa_rate": 0.38,
+                    })
+                except Exception as e:
+                    if self.verbose:
+                        print(f"Warning: live stats failed for team {tid}: {e}")
+            return pd.DataFrame(records)
+
+        live_team_avgs_df = _compute_live_team_stats(current_season, api, team_ids)
+        if self.verbose:
+            if not live_team_avgs_df.empty:
+                print(f"Using live team stats for {len(live_team_avgs_df)} teams")
+            else:
+                msg = "Using cached team stats"
+                if latest_season is not None:
+                    msg += f" ({latest_season})"
+                print(msg)
+
+        team_avgs_effective_df = live_team_avgs_df if not live_team_avgs_df.empty else team_avgs_df
+
+        # Initialize feature engineer preferring live stats
+        engineer = FeatureEngineer(
+            advanced_metrics_df=adv_metrics_df,
+            player_stats_df=player_stats_df,
+            team_avgs_df=team_avgs_effective_df,
+            injuries_df=injuries_df,
+            odds_df=odds_df,
+        )
 
         if self.verbose:
             print(f"Found {len(games_df)} games")

@@ -213,6 +213,7 @@ class BalldontlieProvider(StatsProvider):
                 {
                     "id": team["id"],
                     "name": team["name"],
+                    "full_name": team.get("full_name", team["name"]),
                     "abbreviation": team["abbreviation"],
                     "city": team["city"],
                     "conference": team.get("conference"),
@@ -221,6 +222,124 @@ class BalldontlieProvider(StatsProvider):
             )
 
         return normalized
+
+    def get_current_teams(self) -> list[dict]:
+        """
+        Return only current NBA franchises (East/West conferences).
+
+        Filters out historical teams by requiring a non-empty conference.
+
+        Returns:
+            List of team dicts with id, name, full_name, abbreviation, city, conference, division
+        """
+        teams = self.get_teams()
+        return [t for t in teams if t.get("conference") in ("East", "West")]
+
+    def get_team_games(self, team_id: int | str, season: int) -> list[dict]:
+        """
+        Get all games for a team in a given season.
+
+        Args:
+            team_id: Team ID (int)
+            season: Season year (e.g., 2025)
+
+        Returns:
+            List of normalized game dicts (same shape as get_games)
+        """
+        params = {
+            "team_ids[]": team_id,
+            "seasons[]": season,
+            "per_page": 100,
+        }
+
+        all_games: list[dict] = []
+        page = 1
+        while True:
+            params["page"] = page
+            data = self._request("/games", params)
+            games = data.get("data", [])
+            if not games:
+                break
+
+            for game in games:
+                all_games.append(
+                    {
+                        "id": game["id"],
+                        "date": game["date"],
+                        "home_team": {
+                            "id": game["home_team"]["id"],
+                            "name": game["home_team"]["name"],
+                            "abbreviation": game["home_team"]["abbreviation"],
+                        },
+                        "away_team": {
+                            "id": game["visitor_team"]["id"],
+                            "name": game["visitor_team"]["name"],
+                            "abbreviation": game["visitor_team"]["abbreviation"],
+                        },
+                        "status": game["status"],
+                        "home_score": game.get("home_team_score"),
+                        "away_score": game.get("visitor_team_score"),
+                    }
+                )
+
+            meta = data.get("meta", {})
+            if page >= meta.get("total_pages", 1):
+                break
+            page += 1
+
+        return all_games
+
+    def get_team_season_game_stats(
+        self, team_id: int | str, season: int
+    ) -> dict[int, dict]:
+        """
+        Aggregate per-game team shooting stats (FG3A, FGA) across a season.
+
+        Requires paid tier (stats endpoint).
+
+        Args:
+            team_id: Team ID (int)
+            season: Season year (e.g., 2025)
+
+        Returns:
+            Dict of game_id -> { 'fg3a': int, 'fga': int }
+        """
+        if self.tier == "free":
+            raise PaidTierRequiredError(
+                provider="balldontlie",
+                required_tier="all-star",
+                method="get_team_season_game_stats",
+            )
+
+        params = {
+            "team_ids[]": team_id,
+            "seasons[]": season,
+            "per_page": 100,
+        }
+
+        per_game: dict[int, dict] = {}
+        page = 1
+        while True:
+            params["page"] = page
+            data = self._request("/stats", params)
+            stats = data.get("data", [])
+            if not stats:
+                break
+
+            for s in stats:
+                game_id = s["game"]["id"]
+                fg3a = int(s.get("fg3a", 0) or 0)
+                fga = int(s.get("fga", 0) or 0)
+                g = per_game.setdefault(game_id, {"fg3a": 0, "fga": 0})
+                g["fg3a"] += fg3a
+                g["fga"] += fga
+
+            meta = data.get("meta", {})
+            if page >= meta.get("total_pages", 1):
+                break
+            page += 1
+
+        return per_game
 
     def get_games(self, date: str, **_kwargs: Any) -> list[dict]:
         """

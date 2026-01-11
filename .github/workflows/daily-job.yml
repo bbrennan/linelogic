@@ -38,6 +38,7 @@ jobs:
             - name: Generate daily predictions
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+                BALLDONTLIE_TIER: ${{ secrets.BALLDONTLIE_TIER }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
               run: |
                   python scripts/infer_daily.py --date ${{ steps.dates.outputs.today }} --output predictions_${{ steps.dates.outputs.today }}.csv --verbose
@@ -45,6 +46,7 @@ jobs:
             - name: Store predictions to database
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+                BALLDONTLIE_TIER: ${{ secrets.BALLDONTLIE_TIER }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
               run: |
                   python -m linelogic.app.cli recommend-daily --date ${{ steps.dates.outputs.today }} --no-email
@@ -52,6 +54,7 @@ jobs:
             - name: Run settle-daily
               env:
                   BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
+                  BALLDONTLIE_TIER: ${{ secrets.BALLDONTLIE_TIER }}
                   ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}

@@ -465,11 +465,35 @@ def get_recent_picks(limit=15):
         df = pd.read_sql_query(query, conn)
         if len(df) == 0:
             # Return empty dataframe with correct columns
-            return pd.DataFrame(columns=['created_at', 'market', 'selection', 'model_prob_pct', 'market_prob_pct', 'edge_pct', 'stake', 'result', 'pnl'])
+            return pd.DataFrame(
+                columns=[
+                    "created_at",
+                    "market",
+                    "selection",
+                    "model_prob_pct",
+                    "market_prob_pct",
+                    "edge_pct",
+                    "stake",
+                    "result",
+                    "pnl",
+                ]
+            )
         return df
     except Exception as e:
         st.error(f"Database query error: {e}")
-        return pd.DataFrame(columns=['created_at', 'market', 'selection', 'model_prob_pct', 'market_prob_pct', 'edge_pct', 'stake', 'result', 'pnl'])
+        return pd.DataFrame(
+            columns=[
+                "created_at",
+                "market",
+                "selection",
+                "model_prob_pct",
+                "market_prob_pct",
+                "edge_pct",
+                "stake",
+                "result",
+                "pnl",
+            ]
+        )
 
 
 def format_delta(value, prefix="", suffix=""):
@@ -494,7 +518,7 @@ if Path("linelogic_logo.png").exists():
                 <div class="linelogic-logo">LINELOGIC</div>
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 else:
     st.markdown(
@@ -506,8 +530,8 @@ else:
         Quantitative Sports Betting Intelligence — Model-Driven Recommendations with CLV Tracking
     </div>
     """,
-    unsafe_allow_html=True,
-)
+        unsafe_allow_html=True,
+    )
 
 # ===== LOAD METRICS =====
 try:

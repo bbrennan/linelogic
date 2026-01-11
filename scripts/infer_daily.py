@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from linelogic.data.odds_cache import load_odds_cache
 from linelogic.data.player_injuries_cache import load_player_injuries_cache
 from linelogic.features.engineer import FeatureEngineer
-from linelogic.data.providers.balldontlie import BallDontLieAPI
+from linelogic.data.providers.balldontlie import BalldontlieProvider
 
 
 class DailyInferenceEngine:
@@ -117,72 +117,86 @@ class DailyInferenceEngine:
 
     def score_games(self, games_df, engineer):
         """Score a dataframe of games."""
-        predictions = []
+        if games_df.empty:
+            return pd.DataFrame()
 
-        for idx, row in games_df.iterrows():
-            try:
-                # Engineer features for this game
-                features_dict = engineer.engineer_features(row)
+        try:
+            # For inference, we extract features one game at a time WITHOUT updating state
+            # (state updates require actual results which we don't have for upcoming games)
+            predictions = []
 
-                # Extract features in correct order
-                X = np.array(
-                    [features_dict.get(f, 0) for f in self.feature_names]
-                ).reshape(1, -1)
+            for idx, row in games_df.iterrows():
+                try:
+                    # Extract features for this single game (no state update)
+                    features = engineer._extract_game_features(row)
 
-                # Scale
-                X_scaled = self.scaler.transform(X)
+                    # Extract features in correct order
+                    X = np.array(
+                        [features.get(f, 0) for f in self.feature_names]
+                    ).reshape(1, -1)
 
-                # Predict
-                pred_prob = self.model.predict_proba(X_scaled)[0, 1]  # P(home_win)
+                    # Scale
+                    X_scaled = self.scaler.transform(X)
 
-                # Assign confidence tier
-                tier = self.assign_confidence_tier(row)
+                    # Predict
+                    pred_prob = self.model.predict_proba(X_scaled)[0, 1]  # P(home_win)
 
-                # Recommendation
-                if "TIER 1" in tier:
-                    recommendation = (
-                        "USE MODEL"
-                        if pred_prob >= 0.55
-                        else "USE MODEL (slight away edge)"
+                    # Assign confidence tier
+                    tier = self.assign_confidence_tier(row)
+
+                    # Recommendation
+                    if "TIER 1" in tier:
+                        recommendation = (
+                            "USE MODEL"
+                            if pred_prob >= 0.55
+                            else "USE MODEL (slight away edge)"
+                        )
+                    elif "TIER 2" in tier:
+                        recommendation = "USE WITH VALIDATION"
+                    else:
+                        recommendation = "CROSS-CHECK EXTERNALLY"
+
+                    predictions.append(
+                        {
+                            "date": row["date"],
+                            "home_team": row["home_team"],
+                            "away_team": row["away_team"],
+                            "pred_home_win_prob": round(pred_prob, 4),
+                            "pred_away_win_prob": round(1 - pred_prob, 4),
+                            "home_team_rest_days": row.get("home_rest_days", 0),
+                            "away_team_rest_days": row.get("away_rest_days", 0),
+                            "confidence_tier": tier,
+                            "recommendation": recommendation,
+                        }
                     )
-                elif "TIER 2" in tier:
-                    recommendation = "USE WITH VALIDATION"
-                else:
-                    recommendation = "CROSS-CHECK EXTERNALLY"
-
-                predictions.append(
-                    {
-                        "date": row["date"],
-                        "home_team": row["home_team"],
-                        "away_team": row["away_team"],
-                        "pred_home_win_prob": round(pred_prob, 4),
-                        "pred_away_win_prob": round(1 - pred_prob, 4),
-                        "home_team_rest_days": row.get("home_rest_days", 0),
-                        "away_team_rest_days": row.get("away_rest_days", 0),
-                        "confidence_tier": tier,
-                        "recommendation": recommendation,
-                    }
-                )
-            except Exception as e:
-                if self.verbose:
-                    print(
-                        f"Warning: Could not score {row['home_team']} vs {row['away_team']}: {e}"
+                except Exception as e:
+                    if self.verbose:
+                        print(
+                            f"Warning: Could not score {row['home_team']} vs {row['away_team']}: {e}"
+                        )
+                    predictions.append(
+                        {
+                            "date": row["date"],
+                            "home_team": row["home_team"],
+                            "away_team": row["away_team"],
+                            "pred_home_win_prob": np.nan,
+                            "pred_away_win_prob": np.nan,
+                            "home_team_rest_days": row.get("home_rest_days", 0),
+                            "away_team_rest_days": row.get("away_rest_days", 0),
+                            "confidence_tier": "ERROR",
+                            "recommendation": "SKIP - Feature Error",
+                        }
                     )
-                predictions.append(
-                    {
-                        "date": row["date"],
-                        "home_team": row["home_team"],
-                        "away_team": row["away_team"],
-                        "pred_home_win_prob": np.nan,
-                        "pred_away_win_prob": np.nan,
-                        "home_team_rest_days": row.get("home_rest_days", 0),
-                        "away_team_rest_days": row.get("away_rest_days", 0),
-                        "confidence_tier": "ERROR",
-                        "recommendation": "SKIP - Feature Error",
-                    }
-                )
 
-        return pd.DataFrame(predictions)
+            return pd.DataFrame(predictions)
+
+        except Exception as e:
+            if self.verbose:
+                print(f"Error scoring games: {e}")
+                import traceback
+
+                traceback.print_exc()
+            return pd.DataFrame()
 
     def run(self, date=None, output_csv=None):
         """
@@ -235,9 +249,11 @@ class DailyInferenceEngine:
         if self.verbose:
             print("Fetching games from BALLDONTLIE API...")
 
-        api = BallDontLieAPI()
+        api = BalldontlieProvider()
         try:
-            games = api.fetch_games_by_date(date)
+            # Convert datetime to string format YYYY-MM-DD for API
+            date_str = date.strftime("%Y-%m-%d")
+            games = api.get_games(date_str)
         except Exception as e:
             if self.verbose:
                 print(f"Warning: Could not fetch from API: {e}")
@@ -248,8 +264,24 @@ class DailyInferenceEngine:
                 print(f"No games found for {date.date()}")
             return pd.DataFrame()
 
-        # Convert to dataframe
-        games_df = pd.DataFrame(games)
+        # Convert to dataframe - extract team abbreviations from nested dicts
+        games_data = []
+        for game in games:
+            games_data.append(
+                {
+                    "id": game["id"],
+                    "date": game["date"],
+                    "home_team": game["home_team"]["abbreviation"],
+                    "away_team": game["away_team"]["abbreviation"],
+                    "status": game["status"],
+                    # Add dummy values for feature engineering (not yet played)
+                    "home_score": None,
+                    "away_score": None,
+                    "home_win": None,
+                }
+            )
+
+        games_df = pd.DataFrame(games_data)
         games_df["date"] = pd.to_datetime(games_df["date"])
 
         # Add rest estimation

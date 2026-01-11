@@ -1,0 +1,13 @@
+season,team,player,minutes,PER,BPM,WS48
+2023,Boston Celtics,Player A,1800,20.5,2.3,0.150
+2023,Boston Celtics,Player B,1600,18.2,1.1,0.120
+2023,Boston Celtics,Player C,1400,17.0,0.8,0.110
+2023,Los Angeles Lakers,Player D,2000,19.8,1.9,0.140
+2023,Los Angeles Lakers,Player E,1500,16.5,0.5,0.090
+2023,Los Angeles Lakers,Player F,1300,15.2,0.2,0.080
+2024,Boston Celtics,Player A,1900,21.0,2.5,0.160
+2024,Boston Celtics,Player B,1500,17.8,0.9,0.115
+2024,Boston Celtics,Player C,1300,16.8,0.7,0.105
+2024,Los Angeles Lakers,Player D,1950,20.1,2.1,0.145
+2024,Los Angeles Lakers,Player E,1400,16.0,0.4,0.085
+2024,Los Angeles Lakers,Player F,1250,15.0,0.1,0.075

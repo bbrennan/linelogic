@@ -28,6 +28,40 @@ from linelogic.data.player_injuries_cache import load_player_injuries_cache
 from linelogic.features.engineer import FeatureEngineer
 from linelogic.data.providers.balldontlie import BalldontlieProvider
 
+# Team abbreviation to full name mapping (API uses abbr, cache uses full names)
+TEAM_ABBR_TO_FULL = {
+    "ATL": "Atlanta Hawks",
+    "BOS": "Boston Celtics",
+    "BKN": "Brooklyn Nets",
+    "CHA": "Charlotte Hornets",
+    "CHI": "Chicago Bulls",
+    "CLE": "Cleveland Cavaliers",
+    "DAL": "Dallas Mavericks",
+    "DEN": "Denver Nuggets",
+    "DET": "Detroit Pistons",
+    "GSW": "Golden State Warriors",
+    "HOU": "Houston Rockets",
+    "IND": "Indiana Pacers",
+    "LAC": "LA Clippers",
+    "LAL": "Los Angeles Lakers",
+    "MEM": "Memphis Grizzlies",
+    "MIA": "Miami Heat",
+    "MIL": "Milwaukee Bucks",
+    "MIN": "Minnesota Timberwolves",
+    "NOP": "New Orleans Pelicans",
+    "NYK": "New York Knicks",
+    "OKC": "Oklahoma City Thunder",
+    "ORL": "Orlando Magic",
+    "PHI": "Philadelphia 76ers",
+    "PHX": "Phoenix Suns",
+    "POR": "Portland Trail Blazers",
+    "SAC": "Sacramento Kings",
+    "SAS": "San Antonio Spurs",
+    "TOR": "Toronto Raptors",
+    "UTA": "Utah Jazz",
+    "WAS": "Washington Wizards",
+}
+
 
 class DailyInferenceEngine:
     """Loads model, scores games, outputs with confidence tiers."""
@@ -242,8 +276,38 @@ class DailyInferenceEngine:
         injuries_df = load_player_injuries_cache()
         odds_df = load_odds_cache()
 
-        # Initialize feature engineer
-        engineer = FeatureEngineer(injuries_df=injuries_df, odds_df=odds_df)
+        # Load team stats caches for feature engineering
+        team_avgs_path = Path(".linelogic/team_season_avgs.csv")
+        adv_metrics_path = Path(".linelogic/players_advanced_metrics.csv")
+        player_stats_path = Path(".linelogic/player_stats_cache.csv")
+
+        team_avgs_df = (
+            pd.read_csv(team_avgs_path) if team_avgs_path.exists() else pd.DataFrame()
+        )
+        adv_metrics_df = (
+            pd.read_csv(adv_metrics_path)
+            if adv_metrics_path.exists()
+            else pd.DataFrame()
+        )
+        player_stats_df = (
+            pd.read_csv(player_stats_path)
+            if player_stats_path.exists()
+            else pd.DataFrame()
+        )
+
+        if self.verbose and not team_avgs_df.empty:
+            print(f"Loaded team avgs: {len(team_avgs_df)} rows")
+            print(f"Loaded advanced metrics: {len(adv_metrics_df)} rows")
+            print(f"Loaded player stats: {len(player_stats_df)} rows")
+
+        # Initialize feature engineer with all cached data
+        engineer = FeatureEngineer(
+            advanced_metrics_df=adv_metrics_df,
+            player_stats_df=player_stats_df,
+            team_avgs_df=team_avgs_df,
+            injuries_df=injuries_df,
+            odds_df=odds_df,
+        )
 
         # Fetch games for this date from BALLDONTLIE
         if self.verbose:
@@ -283,6 +347,14 @@ class DailyInferenceEngine:
 
         games_df = pd.DataFrame(games_data)
         games_df["date"] = pd.to_datetime(games_df["date"])
+
+        # Convert abbreviations to full names for feature engineering lookups
+        games_df["home_team"] = games_df["home_team"].map(
+            lambda x: TEAM_ABBR_TO_FULL.get(x, x)
+        )
+        games_df["away_team"] = games_df["away_team"].map(
+            lambda x: TEAM_ABBR_TO_FULL.get(x, x)
+        )
 
         # Add rest estimation
         games_df["home_rest_days"] = games_df.apply(

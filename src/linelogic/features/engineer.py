@@ -168,36 +168,48 @@ class FeatureEngineer:
         game_date = pd.to_datetime(game["date"])
         season = self._season_from_date(game_date)
 
-        # Advanced metrics lookups
+        # For future predictions, use most recent season available in our data
+        # (e.g., for 2026 predictions, use 2024 stats if that's the latest)
+        if self.team_avgs_lookup:
+            available_seasons = set(k[0] for k in self.team_avgs_lookup.keys())
+            if available_seasons:
+                most_recent = max(available_seasons)
+                fallback_season = most_recent if season > most_recent else season
+            else:
+                fallback_season = season
+        else:
+            fallback_season = season
+
+        # Advanced metrics lookups with fallback
         home_adv = self.advanced_lookup.get(
-            (season, home_team), {"PER": 0.0, "BPM": 0.0, "WS48": 0.0}
+            (season, home_team),
+            self.advanced_lookup.get(
+                (fallback_season, home_team), {"PER": 0.0, "BPM": 0.0, "WS48": 0.0}
+            ),
         )
         away_adv = self.advanced_lookup.get(
-            (season, away_team), {"PER": 0.0, "BPM": 0.0, "WS48": 0.0}
+            (season, away_team),
+            self.advanced_lookup.get(
+                (fallback_season, away_team), {"PER": 0.0, "BPM": 0.0, "WS48": 0.0}
+            ),
         )
 
-        # Team season averages (net rating, pace, shot profile)
+        # Team season averages (net rating, pace, shot profile) with fallback
+        default_avgs = {
+            "net_rating": 0.0,
+            "pace": 0.0,
+            "off_rating": 0.0,
+            "def_rating": 0.0,
+            "off_3pa_rate": 0.0,
+            "def_opp_3pa_rate": 0.0,
+        }
         home_avgs = self.team_avgs_lookup.get(
             (season, home_team),
-            {
-                "net_rating": 0.0,
-                "pace": 0.0,
-                "off_rating": 0.0,
-                "def_rating": 0.0,
-                "off_3pa_rate": 0.0,
-                "def_opp_3pa_rate": 0.0,
-            },
+            self.team_avgs_lookup.get((fallback_season, home_team), default_avgs),
         )
         away_avgs = self.team_avgs_lookup.get(
             (season, away_team),
-            {
-                "net_rating": 0.0,
-                "pace": 0.0,
-                "off_rating": 0.0,
-                "def_rating": 0.0,
-                "off_3pa_rate": 0.0,
-                "def_opp_3pa_rate": 0.0,
-            },
+            self.team_avgs_lookup.get((fallback_season, away_team), default_avgs),
         )
 
         # Injuries

@@ -89,6 +89,25 @@ NBA Statistics may only be used for:
 - **Unofficial NFL.com/ESPN scrapers** - ToS violations
 - **UFC Stats scrapers** - ToS violations, high IP ban risk
 
+## NBA Data Sources & Compliance (Detailed)
+
+- **BALLDONTLIE API** (Approved)
+	- Usage: Historical NBA games and (with higher tiers) player stats.
+	- Authentication: HTTP header `Authorization: <API_KEY>`.
+	- Pagination: Cursor-based via `meta.next_cursor`; `per_page=100`.
+	- Rate limits: Honor provider constraints; we enforce ~12 seconds between requests on free tier.
+
+- **Open-Access Advanced Metrics (Approved)**
+	- Source Examples: Basketball-Reference public pages used to create CSV files.
+	- Storage: `.linelogic/players_advanced_metrics.csv` with documented schema.
+	- Restriction: Do not scrape or redistribute paywalled datasets; respect robots.txt and site ToS.
+
+- **ESPN Insider/Hollinger Index** (Prohibited)
+	- Paywalled content; scraping or redistribution violates ToS and copyright.
+	- Not used in the codebase.
+
+For implementation details and current feature list, see [docs/16_player_features_and_sources.md](docs/16_player_features_and_sources.md).
+
 ### Cost Impact Summary
 
 | Phase | Description | Monthly Cost | Legal Status |

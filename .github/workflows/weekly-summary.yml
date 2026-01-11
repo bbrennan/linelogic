@@ -30,19 +30,185 @@ jobs:
                   echo "end_date=$END_DATE" >> $GITHUB_OUTPUT
                   echo "End date: $END_DATE"
 
-            - name: Generate and email weekly summary
+            - name: Run POC validation and email report
               env:
                   SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
                   SMTP_USER: ${{ secrets.SMTP_USER }}
                   SMTP_PASS: ${{ secrets.SMTP_PASS }}
                   FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
               run: |
-                  python -m linelogic.app.cli weekly-summary --date ${{ steps.dates.outputs.end_date }} --email bbrennan83@gmail.com
+                  python scripts/validate_predictions.py \
+                    --predictions predictions_log.csv \
+                    --by-tier --by-team --by-bucket \
+                    --export-json validation_report_${{ steps.dates.outputs.end_date }}.json \
+                    --export-csv tier_metrics_${{ steps.dates.outputs.end_date }}.csv
 
-            - name: Upload weekly report log
-              if: always()
+            - name: Send validation email
+              env:
+                  SMTP_USER: ${{ secrets.SMTP_USER }}
+                  SMTP_PASS: ${{ secrets.SMTP_PASS }}
+                  FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+              run: |
+                  python << 'EOF'
+                  import smtplib
+                  from email.mime.text import MIMEText
+                  from email.mime.multipart import MIMEMultipart
+                  import os
+                  import json
+                  from datetime import datetime, timedelta
+
+                  # Read validation report
+                  report_file = "validation_report_${{ steps.dates.outputs.end_date }}.json"
+                  
+                  try:
+                      with open(report_file, 'r') as f:
+                          report = json.load(f)
+                  except FileNotFoundError:
+                      print("⚠️  Validation report not found. Skipping email.")
+                      exit(0)
+
+                  # Build HTML email
+                  metrics = report['overall_metrics']
+                  by_tier = report['by_tier']
+
+                  html = f"""
+                  <html>
+                    <body style="font-family: Arial, sans-serif; background-color: #f5f5f5; padding: 20px;">
+                      <div style="max-width: 900px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px;">
+                        <h2 style="color: #333; border-bottom: 3px solid #007bff; padding-bottom: 10px;">
+                          📊 LineLogic Weekly Validation Report - Week Ending ${{ steps.dates.outputs.end_date }}
+                        </h2>
+                        
+                        <h3 style="color: #007bff; margin-top: 20px;">Overall Metrics</h3>
+                        <table style="width: 100%; border-collapse: collapse; background-color: #f9f9f9;">
+                          <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 10px; font-weight: bold;">Total Predictions</td>
+                            <td style="padding: 10px;">{metrics.get('total_predictions', 'N/A')}</td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 10px; font-weight: bold;">Overall Accuracy</td>
+                            <td style="padding: 10px; font-weight: bold; color: #28a745;">{metrics.get('accuracy', 0)*100:.1f}%</td>
+                          </tr>
+                          <tr style="border-bottom: 1px solid #ddd;">
+                            <td style="padding: 10px; font-weight: bold;">Log Loss</td>
+                            <td style="padding: 10px;">{metrics.get('log_loss', 0):.4f}</td>
+                          </tr>
+                          <tr>
+                            <td style="padding: 10px; font-weight: bold;">Baseline Home Win Rate</td>
+                            <td style="padding: 10px;">{metrics.get('baseline_home_win_rate', 0)*100:.1f}%</td>
+                          </tr>
+                        </table>
+
+                        <h3 style="color: #007bff; margin-top: 20px;">Accuracy by Confidence Tier</h3>
+                        <table style="width: 100%; border-collapse: collapse;">
+                          <thead>
+                            <tr style="background-color: #007bff; color: white;">
+                              <th style="padding: 12px; text-align: left;">Tier</th>
+                              <th style="padding: 12px; text-align: center;">Accuracy</th>
+                              <th style="padding: 12px; text-align: center;">Games</th>
+                              <th style="padding: 12px; text-align: center;">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                  """
+
+                  tier_targets = {'TIER 1': 0.70, 'TIER 2': 0.68, 'TIER 3': 0.65, 'TIER 4': 0.50}
+                  
+                  for tier_info in by_tier:
+                      tier = tier_info.get('tier', 'N/A')
+                      accuracy = tier_info.get('accuracy', 0)
+                      n_games = tier_info.get('n_games', 0)
+                      
+                      # Status indicator
+                      target = tier_targets.get(tier, 0.65)
+                      status = '✅ On Target' if accuracy >= target else '⚠️ Below Target'
+                      status_color = '#28a745' if accuracy >= target else '#dc3545'
+                      
+                      html += f"""
+                        <tr style="border-bottom: 1px solid #eee;">
+                          <td style="padding: 12px; font-weight: bold;">{tier}</td>
+                          <td style="padding: 12px; text-align: center; font-weight: bold;">{accuracy*100:.1f}%</td>
+                          <td style="padding: 12px; text-align: center;">{n_games}</td>
+                          <td style="padding: 12px; text-align: center; color: {status_color}; font-weight: bold;">{status}</td>
+                        </tr>
+                      """
+
+                  html += """
+                          </tbody>
+                        </table>
+
+                        <div style="margin-top: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 4px; font-size: 13px;">
+                          <strong>📌 Target Accuracy by Tier:</strong><br/>
+                          🟢 TIER 1: ≥70% (HIGH CONFIDENCE)<br/>
+                          🟡 TIER 2: 68-70% (MEDIUM-HIGH)<br/>
+                          🟡 TIER 3: 65-68% (MEDIUM)<br/>
+                          🔴 TIER 4: <50% (CAUTION - Back-to-back games)<br/>
+                        </div>
+
+                        <p style="margin-top: 20px; font-size: 12px; color: #999; text-align: center;">
+                          LineLogic POC Weekly Validation | Data current through ${{ steps.dates.outputs.end_date }}
+                        </p>
+                      </div>
+                    </body>
+                  </html>
+                  """
+
+                  # Send email
+                  try:
+                      smtp_user = os.getenv('SMTP_USER')
+                      smtp_pass = os.getenv('SMTP_PASS')
+                      from_email = os.getenv('FROM_EMAIL', smtp_user)
+                      
+                      if not (smtp_user and smtp_pass):
+                          print("⚠️  SMTP credentials not set. Skipping email.")
+                          exit(0)
+
+                      msg = MIMEMultipart('alternative')
+                      msg['Subject'] = f"LineLogic Weekly Validation - Week Ending ${{ steps.dates.outputs.end_date }}"
+                      msg['From'] = from_email
+                      msg['To'] = 'bbrennan83@gmail.com'
+
+                      msg.attach(MIMEText(html, 'html'))
+
+                      with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                          server.login(smtp_user, smtp_pass)
+                          server.send_message(msg)
+                      
+                      print("✅ Validation email sent successfully!")
+                  except Exception as e:
+                      print(f"⚠️  Email failed: {e}")
+                  EOF
+
+            - name: Legacy: Run weekly-summary (if exists)
+              env:
+                  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+                  SMTP_USER: ${{ secrets.SMTP_USER }}
+                  SMTP_PASS: ${{ secrets.SMTP_PASS }}
+                  FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+              continue-on-error: true
+              run: |
+                  python -m linelogic.app.cli weekly-summary --date ${{ steps.dates.outputs.end_date }} --email bbrennan83@gmail.com 2>/dev/null || true
+
+            - name: Commit validation reports
+              run: |
+                  git config --local user.email "action@github.com"
+                  git config --local user.name "LineLogic Bot"
+
+                  git add validation_report_*.json tier_metrics_*.csv 2>/dev/null || true
+
+                  if git diff --cached --quiet; then
+                    echo "No validation reports to commit"
+                  else
+                    git commit -m "chore: Add weekly validation report (${{ steps.dates.outputs.end_date }})"
+                    git push
+                  fi
+              continue-on-error: true
+
+            - name: Upload validation artifacts
               uses: actions/upload-artifact@v3
               with:
-                  name: linelogic-weekly-summary-log
-                  path: .linelogic/linelogic.log
-                  retention-days: 14
+                  name: linelogic-validation-${{ steps.dates.outputs.end_date }}
+                  path: |
+                    validation_report_*.json
+                    tier_metrics_*.csv
+                  retention-days: 30

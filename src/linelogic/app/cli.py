@@ -115,14 +115,14 @@ def recommend_daily(date: str, email: str, no_email: bool) -> None:
         if not no_email and result["count"] > 0:
             try:
                 from linelogic.eval.summary import SummaryGenerator
-                from linelogic.email_sender import EmailSender
+                from linelogic.email_router import get_email_sender
 
                 summary_gen = SummaryGenerator()
                 html_email, _ = summary_gen.generate_html_summary(date, date)
                 summary_gen.close()
 
-                email_sender = EmailSender()
-                if email_sender.send_email(
+                sender = get_email_sender()
+                if sender.send_email(
                     to_email=email,
                     subject=f"LineLogic Daily Picks - {date}",
                     html_content=html_email,
@@ -171,7 +171,7 @@ def settle_daily(date: str, email: str, no_email: bool) -> None:
         if not no_email and result["settled_count"] > 0:
             try:
                 from linelogic.eval.summary import SummaryGenerator
-                from linelogic.email_sender import EmailSender
+                from linelogic.email_router import get_email_sender
                 from datetime import datetime, timedelta
 
                 yesterday = (
@@ -182,8 +182,8 @@ def settle_daily(date: str, email: str, no_email: bool) -> None:
                 _, html_email = summary_gen.generate_html_summary(date, yesterday)
                 summary_gen.close()
 
-                email_sender = EmailSender()
-                if email_sender.send_email(
+                sender = get_email_sender()
+                if sender.send_email(
                     to_email=email,
                     subject=f"LineLogic Settlement Report - {yesterday}",
                     html_content=html_email,
@@ -211,6 +211,79 @@ def recommend(sport: str, date: str | None) -> None:
     click.echo("🚧 Use 'linelogic recommend-daily --date YYYY-MM-DD' instead")
     click.echo(f"   Sport: {sport}")
     click.echo(f"   Date: {date or 'today'}")
+
+
+@main.command("weekly-summary")
+@click.option(
+    "--date", required=True, help="End date in YYYY-MM-DD format (typically today)"
+)
+@click.option(
+    "--email", default="bbrennan83@gmail.com", help="Email to send summary to"
+)
+@click.option("--no-email", is_flag=True, help="Skip email sending")
+def weekly_summary(date: str, email: str, no_email: bool) -> None:
+    """
+    Generate comprehensive weekly analysis report.
+
+    Analyzes:
+    - Results trends (W-L, ROI, P&L trajectory)
+    - Edge distribution and statistics
+    - Team performance patterns
+    - Odds correlations
+    - Bankroll growth
+    - Confidence metrics and statistical significance
+    - Hypotheses for feature engineering
+    """
+    try:
+        from linelogic.eval.weekly_summary import WeeklySummaryGenerator
+
+        gen = WeeklySummaryGenerator()
+        html_report = gen.generate_html_weekly_report(date)
+        gen.close()
+
+        click.echo(f"📊 Weekly Analysis Report for {date}")
+        click.echo("=" * 50)
+
+        # Parse dates for display
+        from datetime import datetime, timedelta
+
+        end_date = datetime.strptime(date, "%Y-%m-%d")
+        start_date = end_date - timedelta(days=6)
+
+        click.echo(f"Period: {start_date.strftime('%Y-%m-%d')} to {date}")
+        click.echo("✅ Report generated")
+
+        # Send email if requested
+        if not no_email:
+            try:
+                from linelogic.email_router import get_email_sender
+
+                sender = get_email_sender()
+                if sender.send_email(
+                    to_email=email,
+                    subject=f"LineLogic Weekly Analysis - Week of {start_date.strftime('%Y-%m-%d')}",
+                    html_content=html_report,
+                ):
+                    click.echo(f"📧 Report emailed to {email}")
+                else:
+                    click.echo(f"⚠️  Email send failed")
+            except ValueError as exc:
+                click.echo(f"⚠️  Email skipped: {exc}")
+            except Exception as exc:
+                click.echo(f"⚠️  Email error: {exc}")
+
+        click.echo("=" * 50)
+        click.echo("\nKey sections in email:")
+        click.echo("  • Results summary (W-L, ROI, P&L)")
+        click.echo("  • Edge distribution analysis")
+        click.echo("  • Team performance breakdown")
+        click.echo("  • Odds patterns and correlations")
+        click.echo("  • Bankroll trajectory")
+        click.echo("  • Hypotheses for feature engineering")
+        click.echo("  • Statistical confidence metrics")
+
+    except Exception as exc:
+        click.echo(f"❌ Error: {exc}")
 
 
 @main.command()

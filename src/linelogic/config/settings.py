@@ -61,6 +61,23 @@ class Settings(BaseSettings):
     odds_api_key: str = Field(default="", description="The Odds API key")
     weatherapi_key: str = Field(default="", description="WeatherAPI key")
     sendgrid_api_key: str = Field(default="", description="SendGrid API key for email")
+    # Email Provider Selection
+    email_provider: str = Field(
+        default="",
+        description="Preferred email provider: sendgrid or smtp (blank = auto)",
+    )
+
+    # SMTP (fallback/alternative)
+    smtp_host: str = Field(default="", description="SMTP server host")
+    smtp_port: int = Field(default=587, description="SMTP server port")
+    smtp_user: str = Field(default="", description="SMTP username")
+    smtp_pass: str = Field(
+        default="", description="SMTP password or app-specific password"
+    )
+    smtp_tls: bool = Field(default=True, description="Use STARTTLS for SMTP")
+    from_email: str = Field(
+        default="linelogic@example.com", description="Default From email address"
+    )
 
 
 # Global settings instance

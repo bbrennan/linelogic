@@ -27,7 +27,7 @@ jobs:
                   pip install -e .
 
             - name: Ingest current teams (live)
-              if: ${{ secrets.BALLDONTLIE_API_KEY != '' }}
+              if: ${{ env.BALLDONTLIE_API_KEY != '' }}
               run: |
                   python - << 'PY'
                   from linelogic.ingest.pipeline import IngestPipeline
@@ -41,7 +41,7 @@ jobs:
                   PY
 
             - name: Ingest current teams (offline fixture)
-              if: ${{ secrets.BALLDONTLIE_API_KEY == '' }}
+              if: ${{ env.BALLDONTLIE_API_KEY == '' }}
               run: |
                   python - << 'PY'
                   import json
@@ -71,7 +71,7 @@ jobs:
                   PY
 
             - name: Ingest daily games (today, live)
-              if: ${{ secrets.BALLDONTLIE_API_KEY != '' }}
+              if: ${{ env.BALLDONTLIE_API_KEY != '' }}
               run: |
                   python - << 'PY'
                   from datetime import datetime
@@ -87,7 +87,7 @@ jobs:
                   PY
 
             - name: Ingest daily games (offline fixture)
-              if: ${{ secrets.BALLDONTLIE_API_KEY == '' }}
+              if: ${{ env.BALLDONTLIE_API_KEY == '' }}
               run: |
                   python - << 'PY'
                   import json

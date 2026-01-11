@@ -27,6 +27,121 @@ def main() -> None:
     pass
 
 
+@main.group()
+def ingest() -> None:
+    """Ingest and persist raw provider data (local)."""
+    pass
+
+
+@ingest.command("daily")
+@click.option("--sport", default="basketball_nba", show_default=True)
+@click.option("--date", "date_str", required=True, help="Date in YYYY-MM-DD")
+@click.option(
+    "--data-dir",
+    default="./data",
+    show_default=True,
+    help="Root directory for bronze/silver/gold storage",
+)
+def ingest_daily(sport: str, date_str: str, data_dir: str) -> None:
+    """Ingest daily BDL games and (optionally) an Odds API snapshot."""
+
+    from pathlib import Path
+
+    from linelogic.config.settings import settings
+    from linelogic.data.providers.balldontlie import BalldontlieProvider
+    from linelogic.data.providers.odds import TheOddsAPIProvider
+    from linelogic.ingest.bronze_writer import BronzeWriter
+    from linelogic.ingest.paths import DataPaths
+    from linelogic.ingest.run import RunContext
+
+    paths = DataPaths(root=Path(data_dir))
+    paths.ensure()
+
+    run = RunContext.create()
+    run_dir = paths.run_dir(run.date, run.run_id)
+
+    run.write_run_config(
+        run_dir,
+        {
+            "command": "ingest daily",
+            "sport": sport,
+            "date": date_str,
+            "data_dir": str(Path(data_dir).resolve()),
+        },
+    )
+
+    metrics: dict[str, int] = {
+        "bronze_writes": 0,
+        "oddsapi_calls": 0,
+        "balldontlie_calls": 0,
+    }
+
+    # BALLDONTLIE: daily games
+    bdl = BalldontlieProvider()
+    games = bdl.get_games(date_str)
+    metrics["balldontlie_calls"] += 1
+    bdl_endpoint_dir = paths.bronze_run_dir(
+        provider="balldontlie",
+        sport=sport,
+        date=date_str,
+        run_id=run.run_id,
+        endpoint="games",
+    )
+    bdl_result = BronzeWriter(bdl_endpoint_dir).write_json(
+        payload=games,
+        manifest={
+            "provider": "balldontlie",
+            "endpoint": "games",
+            "sport": sport,
+            "date": date_str,
+            "run_id": run.run_id,
+        },
+    )
+    metrics["bronze_writes"] += 1
+    click.echo(f"✅ BDL games written: {bdl_result.response_path}")
+
+    # The Odds API: current odds snapshot (skip if no key)
+    if settings.odds_api_key:
+        odds = TheOddsAPIProvider()
+        odds_data = odds.get_game_odds(
+            _sport=sport,
+            markets="h2h,spreads,totals",
+        )
+        metrics["oddsapi_calls"] += 1
+        odds_endpoint_dir = paths.bronze_run_dir(
+            provider="oddsapi",
+            sport=sport,
+            date=date_str,
+            run_id=run.run_id,
+            endpoint=f"sports/{sport}/odds",
+        )
+        odds_result = BronzeWriter(odds_endpoint_dir).write_json(
+            payload=odds_data,
+            manifest={
+                "provider": "oddsapi",
+                "endpoint": f"sports/{sport}/odds",
+                "sport": sport,
+                "date": date_str,
+                "run_id": run.run_id,
+            },
+        )
+        metrics["bronze_writes"] += 1
+        click.echo(f"✅ Odds snapshot written: {odds_result.response_path}")
+    else:
+        click.echo("⚠️  ODDS_API_KEY not set; skipping odds ingestion")
+
+    run.write_run_summary(
+        run_dir,
+        {
+            "status": "ok",
+            "sport": sport,
+            "date": date_str,
+        },
+    )
+    run.write_metrics(run_dir, metrics)
+    click.echo(f"🧾 Run manifest written under: {run_dir}")
+
+
 @main.command()
 def check() -> None:
     """
@@ -126,7 +241,10 @@ def recommend_daily(date: str, email: str, no_email: bool) -> None:
                 from linelogic.email_router import get_email_sender
 
                 summary_gen = SummaryGenerator()
-                html_email, _ = summary_gen.generate_html_summary(date, date)
+                html_email, _ = summary_gen.generate_html_summary(
+                    date,
+                    date,
+                )
                 summary_gen.close()
 
                 sender = get_email_sender()
@@ -193,7 +311,10 @@ def settle_daily(date: str, email: str, no_email: bool) -> None:
                 ).strftime("%Y-%m-%d")
 
                 summary_gen = SummaryGenerator()
-                _, html_email = summary_gen.generate_html_summary(date, yesterday)
+                _, html_email = summary_gen.generate_html_summary(
+                    date,
+                    yesterday,
+                )
                 summary_gen.close()
 
                 sender = get_email_sender()
@@ -327,7 +448,11 @@ def backtest(start_date: str, end_date: str) -> None:
 
 
 @main.command()
-@click.option("--period", default="month", help="Report period (week, month, all)")
+@click.option(
+    "--period",
+    default="month",
+    help="Report period (week, month, all)",
+)
 def report(period: str) -> None:
     """
     Generate performance report.

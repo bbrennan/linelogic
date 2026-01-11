@@ -89,7 +89,8 @@ LineLogic can run automatically every day without manual intervention:
 
 - **Cloud (GitHub Actions)**: 9 AM UTC daily on GitHub servers (24/7, no laptop required)
   - [Setup Guide](docs/specs/setup/11_github_actions_scheduler.md)
-  - Requires: BALLDONTLIE_API_KEY, ODDS_API_KEY secrets
+  - Requires: `BALLDONTLIE_API_KEY`, `ODDS_API_KEY` secrets
+  - If emailing is enabled: `SMTP_USER`, `SMTP_PASS`, `FROM_EMAIL`, `TO_EMAIL`
 
 - **Email Notifications**: Daily summaries with bankroll tracking and results
   - Requires: SendGrid free account (100 emails/day, sufficient for daily reports)

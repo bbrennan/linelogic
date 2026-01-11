@@ -78,8 +78,9 @@ logs/
 *.ipynb
 
 # LineLogic specific
-data/raw/
-data/processed/
+/data/
+/data/raw/
+/data/processed/
 models/checkpoints/
 experiments/
 mlruns/

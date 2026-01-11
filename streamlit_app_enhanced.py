@@ -440,8 +440,7 @@ def get_recent_picks(limit=15):
     """Fetch recent recommendations with enhanced display."""
     conn = get_connection()
 
-    return pd.read_sql_query(
-        f"""
+    primary_query = f"""
         SELECT 
             r.created_at,
             r.market,
@@ -461,9 +460,35 @@ def get_recent_picks(limit=15):
         LEFT JOIN results res ON r.id = res.recommendation_id
         ORDER BY r.created_at DESC
         LIMIT {limit}
-    """,
-        conn,
-    )
+    """
+
+    fallback_query = f"""
+        SELECT 
+            r.created_at,
+            'ML' as market,
+            r.selection,
+            ROUND(r.model_prob * 100, 1) as model_prob_pct,
+            ROUND(r.market_prob * 100, 1) as market_prob_pct,
+            ROUND(r.edge * 100, 2) as edge_pct,
+            r.confidence_tier,
+            r.stake_suggested as stake,
+            CASE
+                WHEN res.outcome_win_bool = 1 THEN '✅ Win'
+                WHEN res.outcome_win_bool = 0 THEN '❌ Loss'
+                ELSE '⏳ Pending'
+            END as result,
+            COALESCE(ROUND(res.profit_loss, 2), 0) as pnl
+        FROM recommendations r
+        LEFT JOIN results res ON r.id = res.recommendation_id
+        ORDER BY r.created_at DESC
+        LIMIT {limit}
+    """
+
+    try:
+        return pd.read_sql_query(primary_query, conn)
+    except Exception:
+        st.warning("Database missing `market` column; defaulting market to 'ML'.")
+        return pd.read_sql_query(fallback_query, conn)
 
 
 def format_delta(value, prefix="", suffix=""):

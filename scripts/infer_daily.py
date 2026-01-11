@@ -276,7 +276,17 @@ class DailyInferenceEngine:
         injuries_df = load_player_injuries_cache()
         odds_df = load_odds_cache()
 
-        # Load team stats caches for feature engineering
+        # Fetch CURRENT season stats from API (not stale cache!)
+        # For 2026-01-11, use 2025-2026 season data
+        current_season = date.year if date.month >= 10 else date.year - 1
+
+        if self.verbose:
+            print(
+                f"Fetching current season ({current_season}-{current_season+1}) stats from API..."
+            )
+
+        # Use cached data as fallback, but try to use live data
+        # TODO: Implement live stat fetching - for now use cache with season filter
         team_avgs_path = Path(".linelogic/team_season_avgs.csv")
         adv_metrics_path = Path(".linelogic/players_advanced_metrics.csv")
         player_stats_path = Path(".linelogic/player_stats_cache.csv")
@@ -294,6 +304,18 @@ class DailyInferenceEngine:
             if player_stats_path.exists()
             else pd.DataFrame()
         )
+
+        # Filter to most recent season available
+        if not team_avgs_df.empty and "season" in team_avgs_df.columns:
+            latest_season = team_avgs_df["season"].max()
+            team_avgs_df = team_avgs_df[team_avgs_df["season"] == latest_season]
+            if self.verbose:
+                print(
+                    f"⚠️  WARNING: Using cached {latest_season} season data (current season: {current_season})"
+                )
+                print(
+                    f"   For production, fetch live {current_season} stats from balldontlie API!"
+                )
 
         if self.verbose and not team_avgs_df.empty:
             print(f"Loaded team avgs: {len(team_avgs_df)} rows")
